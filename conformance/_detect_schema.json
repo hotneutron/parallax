@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "parallax detect result (DAEMON_INTERFACE §4)",
+  "_doc": "The machine-readable result every conformant `detect` writes to <home>/<detect_result>. The suite asserts classify / zero-obligation on THIS, never on stdout wording. obligation = (tier 1 or tier 2 non-empty).",
+  "type": "object",
+  "required": ["partner", "their_head", "pinned", "tiers", "obligation"],
+  "properties": {
+    "partner": {"type": "string"},
+    "their_head": {"type": "string"},
+    "pinned": {"type": "string"},
+    "tiers": {
+      "type": "object",
+      "additionalProperties": {"type": "array", "items": {"type": "string"}}
+    },
+    "obligation": {"type": "boolean"},
+    "unclassified": {"type": "array", "items": {"type": "string"},
+                     "_doc": "P2: triggered-but-unclassified files surfaced for manual review"},
+    "next": {"type": "array", "items": {"type": "string"},
+             "_doc": "P2: the exact follow-up commands (read T1/T2 paths, then prepare); empty when zero-obligation"}
+  }
+}

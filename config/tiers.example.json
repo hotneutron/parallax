@@ -1,0 +1,29 @@
+{
+  "_doc": "parallax tiers config — customize classification for your domain. Overrides inline defaults. All fields optional — missing fields fall back to the daemon's built-in defaults.",
+  "self_name": "your-team-name",
+  "_self_name_doc": "this consumer's repo id; used by addressed_to_us to detect a doc that responds to us (a parent_artifacts entry citing this string).",
+  "addressed": ["proposal"],
+  "_addressed_doc": "artifact_types that are T1 unconditionally (a cross-team ask demanding a response).",
+  "addressed_to_us": ["reaction", "cross_check"],
+  "_addressed_to_us_doc": "artifact_types that are T1 ONLY when a parent cites self_name (a reaction ABOUT us is must-read; one about something else falls through to optional). Cuts T1 noise.",
+  "atypes": {
+    "findings": 2,
+    "plan": 2,
+    "brainstorm": 3,
+    "backlog": 3,
+    "reflection": 4
+  },
+  "triggers": [
+    "docs/",
+    "sync_ledger.json",
+    "methodology/cross_team/",
+    "schemas/",
+    "PROTOCOL.md"
+  ],
+  "contracts": [
+    "schemas/",
+    "PROTOCOL.md",
+    "PROTOCOL_INVARIANTS.json",
+    "VERSIONS.md"
+  ]
+}

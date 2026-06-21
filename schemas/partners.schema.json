@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Parallax Partner Registry",
+  "description": "Cross-team partner registry schema v1.0",
+  "type": "object",
+  "required": [
+    "partners"
+  ],
+  "properties": {
+    "_doc": {
+      "type": "string"
+    },
+    "partners": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "path"
+        ],
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "team_name": {
+            "type": "string"
+          },
+          "protocol_version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+$"
+          },
+          "last_pinned": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[0-9a-f]{7,40}$"
+          },
+          "last_sync": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "beacon": {
+            "type": "object",
+            "properties": {
+              "budget": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "ok",
+                  "low",
+                  "exhausted",
+                  null
+                ]
+              },
+              "responsive_after": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

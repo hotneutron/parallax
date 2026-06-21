@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "parallax daemon-interface contract",
+  "version": "1.0",
+  "_doc": "Second frozen contract after the data schemas. Agrees on config discovery, canonical subcommands, and exit-code semantics — the minimal invocation surface a cross-conformance suite can assert on. With this + the data schemas, either team's suite can fairly invoke either team's daemon.",
+  "config_discovery": {
+    "method": "PARALLAX_HOME env var, falling back to nearest-ancestor-of-cwd containing partners.json, falling back to script-relative",
+    "PARALLAX_HOME": "environment variable pointing to the sync home directory (where partners.json, sync_ledger.json, embargo_registry.json live)",
+    "fallback_1": "walk up from cwd until a directory containing partners.json is found (stop at filesystem root)",
+    "fallback_2": "use the directory containing _sync.py as the sync home (script-relative)",
+    "rationale": "neither script-relative nor cwd-relative alone is portable across repos and conformance harnesses"
+  },
+  "canonical_subcommands": {
+    "detect": {"args": "<partner>", "description": "find new partner commits, classify, draft ledger entry"},
+    "read": {"args": "<partner> <path>", "description": "sanctioned partner content access (git-show + auto-log)"},
+    "prepare": {"args": "<partner>", "description": "generate reaction template from draft ledger entry"},
+    "relay": {"args": "<partner> [paths...]", "description": "verify working tree clean; stage paths for partner relay. No paths = check all. Exit 1 if dirty docs."},
+    "count": {"args": "<partner>", "description": "non-blocking status report (commit count since last sync)"},
+    "guard": {"args": "<path>", "description": "exit 1 if path is inside any partner repo (read-guard enforcement)"},
+    "aliases": "status→count, check-relay→relay, check-read-guard→guard (accepted but not advertised; conformance suites invoke canonical names only)"
+  },
+  "exit_codes": {
+    "0": "success / allowed / clean / sync-complete",
+    "1": "refused / blocked / unreachable / embargo-violation / dirty-docs-at-relay",
+    "2": "error / invalid-usage / missing-config / unknown-command",
+    "rationale": "suite checks exit codes + file effects (ledger written, quarantine populated, subject redacted). NEVER checks daemon output wording."
+  },
+  "conformance_suite_rules": {
+    "assert_on": ["exit codes", "file effects (ledger entry written, quarantine populated)", "subject absence (embargoed commit subjects not present in any output)"],
+    "never_assert_on": ["daemon output wording", "subcommand-specific prose", "error-message exact text"],
+    "cannot_invoke": "a daemon that errors before reaching behaviour (config not found, missing dependency) is scored as 'cannot invoke', not 'failed'",
+    "fairness": "either team's suite must be able to invoke either team's daemon. The judge = whichever suite has higher coverage after both are hardened"
+  }
+}

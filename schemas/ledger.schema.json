@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Parallax Sync Ledger",
+  "description": "Cross-team sync ledger entry schema v1.0",
+  "type": "object",
+  "required": [
+    "entries"
+  ],
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "date",
+          "their_head"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "partner": {
+            "type": "string"
+          },
+          "their_head": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$"
+          },
+          "their_head_msg": {
+            "type": "string"
+          },
+          "our_head": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$"
+          },
+          "our_head_msg": {
+            "type": "string"
+          },
+          "reviewed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "obligations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "obligations_done": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "title": "parallax unified daemon — machine-readable invocation declaration",
+  "protocol": "parallax",
+  "version": "2.0",
+  "daemon": "parallax.py",
+  "_doc": "The PARSEABLE invocation declaration: a consumer's adapter-builder reads THIS to invoke the daemon deterministically — no prose-reading, no --help parsing, no behavioural probing, no model tokens spent inferring conventions. The canonical schema for this declaration; supersedes the prose-shaped seed. Not a JSON-Schema (it validates nothing) — it is a declaration; the one DATA artifact (detect_result) names its own validating schema.",
+  "config_discovery": {
+    "env_var": "PARALLAX_HOME",
+    "fallbacks": ["nearest cwd-ancestor containing partners.json", "script directory"],
+    "not": "script-relative-first"
+  },
+  "subcommands": {
+    "detect":  {"argv": ["detect", "{partner}"],            "exit": {"0": "success", "1": "partner not found"}, "writes": ["detect_result", "entry_draft"], "mutates_committed_state": false},
+    "read":    {"argv": ["read", "{partner}", "{path}"],     "exit": {"0": "success", "1": "path absent from committed HEAD", "2": "usage"}, "stdout": "committed file content", "appends": "manifest", "writes": "entry_draft"},
+    "prepare": {"argv": ["prepare", "{partner}"],            "exit": {"0": "success", "1": "no draft", "2": "usage"}, "flags": {"--advance": "fill reviewed from the manifest + advance the pin in-tree"}},
+    "relay":   {"argv": ["relay", "{partner}", "{path}..."], "exit": {"0": "clean", "1": "dirty/blocked"}, "emits": "relay_pointer carrying our HEAD", "refuses_if": "a relayed path is dirty/untracked (per-path, not whole-tree)"},
+    "count":   {"argv": ["count", "{partner}"],              "exit": {"0": "success", "1": "partner not found"}, "emits": "numeric ahead-count, never subjects"}
+  },
+  "exit_codes": {
+    "0": "success / allowed",
+    "1": "operational refusal (partner-not-found, read-uncommitted, relay-dirty, guard-blocked)",
+    "2": "usage / argument error (unknown command, missing arg, missing/corrupt config)"
+  },
+  "detect_result": {
+    "file": "_detect.json",
+    "validating_schema": "conformance/_detect_schema.json",
+    "shape": {"partner": "str", "their_head": "str", "pinned": "str", "tiers": "{\"1\".. : [path]}", "obligation": "bool", "unclassified": "[path]", "next": "[command]"}
+  },
+  "effects": {
+    "manifest": "_parallax_read_log.json",
+    "entry_draft": "_sync_entry_draft.json",
+    "draft_semantics": "to_review filled at detect (classified); reviewed filled at prepare (actually-read, from the manifest) — 2a",
+    "sync_flag": ".parallax_sync_mode",
+    "relay_pointer": "_relay.json",
+    "quarantine": "_parallax_quarantine"
+  },
+  "guard": {
+    "mechanism": "PreToolUse hook — the daemon invoked with --read-guard reads a tool-call event as JSON on stdin and gates partner-repo access",
+    "invoke": ["--read-guard"],
+    "blocks_exit": 2,
+    "allows_exit": 0,
+    "sync_flag": ".parallax_sync_mode",
+    "rationale": "a hook blocks unconditionally (exit 2 denies the tool call); the sync-flag file is the sanctioned-access escape hatch",
+    "cli_check": {"argv": ["guard", "{path}"], "exit": {"0": "allowed", "1": "inside a partner repo (blocked)", "2": "usage"}}
+  },
+  "adapter_build": "A consumer reads subcommands.argv + detect_result.file + effects + exit_codes + guard.invoke to build an adapter mechanically (see conformance/_adapter.from_interface_declaration). No --help parsing, no behavioural probing required to invoke."
+}

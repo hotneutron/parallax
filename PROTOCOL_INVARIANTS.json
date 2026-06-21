@@ -1,0 +1,39 @@
+{
+  "protocol": "parallax",
+  "version": "1.0",
+  "_doc": "Constitutional invariants every implementation must satisfy. Two-tier enforcement: Tier 1 violations block (exit 1). Tier 2 violations block promotion. Amendments require bilateral agreement + version bump.",
+  "invariants": {
+    "P1": {
+      "tier": 1,
+      "statement": "Independence before reconciliation. Teams commit their own results before cross-reading the partner's. Contamination boundaries declared in frontmatter provenance_note."
+    },
+    "P2": {
+      "tier": 1,
+      "statement": "No findings compromise without measurement. Three-layer rule: findings resolve by measurement only, never by negotiation."
+    },
+    "P3": {
+      "tier": 1,
+      "statement": "Convergence tags are machine-checked. Every reaction/cross_check carries convergence:. Modal discount applied where shared triggers/priors explain the agreement. Independent credit without cited forcing measurement defaults to modal."
+    },
+    "P4": {
+      "tier": 1,
+      "statement": "Failed gates name their cause, never move the bracket. Pre-registered brackets are immutable. A gate failure is a finding with a named cause."
+    },
+    "P5": {
+      "tier": 2,
+      "statement": "Leaks are declared, not hidden. Undisclosed contamination is a protocol violation. Disclosed contamination is a downgrade (propagated/modal), work continues."
+    },
+    "P6": {
+      "tier": 2,
+      "statement": "Async-first — no blocking waits. No sync step requires the partner to be live. Obligations carry on_miss semantics. Acks never required, always sufficient."
+    },
+    "P7": {
+      "tier": 2,
+      "statement": "Autonomy gates on enforcement. No autonomous sync without embargo redaction + read-guard + round limits + commit-before-relay live. Premature autonomy is auto-contamination."
+    },
+    "P8": {
+      "tier": 2,
+      "statement": "The protocol tests itself. The protocol's own efficacy is measured (divergence rate, correction round counts, modal discount rate). A falling divergence rate is a herding warning."
+    }
+  }
+}

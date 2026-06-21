@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Parallax Embargo Registry",
+  "description": "Active pre-registration topic embargo schema v1.0",
+  "type": "object",
+  "required": [
+    "embargoes"
+  ],
+  "properties": {
+    "embargoes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "topic_id",
+          "pattern"
+        ],
+        "properties": {
+          "topic_id": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "active_until": {},
+          "pre_registration_commit": {},
+          "_note": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean",
+            "_doc": "explicitly-active embargo. True wins over an expired active_until (never auto-lift an explicitly-active embargo). The canonical activeness predicate: active is True OR active_until >= today."
+          }
+        }
+      }
+    }
+  }
+}

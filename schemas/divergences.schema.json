@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Parallax Divergence Registry",
+  "description": "Mirrored+diffed divergence registry (rung 3). Each team maintains their own; the daemon diffs them. Schema v1.1 — team-agnostic: side keys and resolved:<team> status come from the team identities configured in partners.json (self.team_name + each partner's team_name); the schema fixes no team names.",
+  "type": "object",
+  "required": ["entries"],
+  "properties": {
+    "_doc": {"type": "string"},
+    "file": {
+      "type": "string",
+      "enum": ["recent", "archived.resolved", "archived.open"],
+      "description": "Which aging tier this file belongs to. Only recent.json is diffed by div-diff."
+    },
+    "aging": {
+      "type": "object",
+      "description": "Shared aging policy — same thresholds on both sides for deterministic archive decisions.",
+      "properties": {
+        "archive_resolved_after_days": {
+          "type": "number",
+          "description": "Resolved entries older than this (from last_updated) move to archived.resolved.json. Default: 60."
+        },
+        "archive_open_after_days": {
+          "type": "number",
+          "description": "Open entries with no update for this long move to archived.open.json. Default: 90."
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["claim", "sides", "crux", "status", "last_updated"],
+        "properties": {
+          "claim": {
+            "type": "string",
+            "description": "The claims_index.id the teams disagree on (coupling point to rung 2)"
+          },
+          "sides": {
+            "type": "object",
+            "minProperties": 2,
+            "additionalProperties": {"type": "string"},
+            "description": "Map of team_name → that team's one-line position. Team names are the identities from partners.json (self.team_name and each partner's team_name); the schema does not fix them. At least two sides."
+          },
+          "crux": {
+            "type": "string",
+            "description": "The single measurable question that would settle this"
+          },
+          "resolution_measurement": {
+            "type": "string",
+            "description": "The experiment/runner that answers the crux (the close condition); where it is a doc, lead with a compact repo-stable doc-id (the consumer's naming convention) rather than a full path."
+          },
+          "status": {
+            "type": "string",
+            "pattern": "^(open|measuring|resolved:[^:]+|resolved:both-revised)$",
+            "description": "open | measuring | resolved:<team_name> | resolved:both-revised. resolved:<team> names a partners.json team identity; resolved:* only when resolution_measurement has been run."
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO date of last status change — drives aging"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {"pattern": "^resolved"}
+              }
+            },
+            "then": {
+              "required": ["resolution_measurement"],
+              "properties": {
+                "resolution_measurement": {"minLength": 1}
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

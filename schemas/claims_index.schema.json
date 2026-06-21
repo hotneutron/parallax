@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Parallax Claims Index",
+  "description": "COMPILED per-repo index of CLAIMS offered into the cross-team exchange (corroboration or divergence subjects), from any source doc type. Generated from `claims:` marks in the source docs into a recent sliding window (∪ claims a live divergence references); not hand-maintained, so it can't go stale; entries age to archived once settled. The convergence-STATE surface: each claim carries evidence_tier (how grounded) + convergence_tag (how it converged cross-team) + status; index-diff reports the state delta. Cross-team diffability emerges as terminology converges through exchange (interface-layer; substance-independence is recorded in convergence_tag). Schema v1.1.",
+  "type": "object",
+  "required": ["entries"],
+  "properties": {
+    "_doc": {"type": "string"},
+    "file": {
+      "type": "string",
+      "enum": ["recent", "archived"],
+      "description": "Aging tier (mirrors divergences). recent = the hot working set (read-reduction + active convergence checks); archived = the retained durable convergence/validation ledger. Default recent — the diff hot path is recent; corroboration verdicts persist in archived rather than being discarded."
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "evidence_tier"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable claim id, repo-namespaced (e.g. teamB:F-SERVING-1)",
+            "pattern": "^[a-z0-9]+:[A-Z]+-[A-Z0-9_]+-[0-9]+$"
+          },
+          "statement": {
+            "type": "string",
+            "description": "The claim in one sentence"
+          },
+          "evidence_ref": {
+            "type": "string",
+            "description": "Pointer to evidence — a compact, repo-stable id in the consumer's own naming convention (a short doc-id resolvable within the repo), an exercise_step, or a runner. Prefer a compact id over a full path: the index exists to shrink the read surface. Required for measured and inferred tiers (F5)."
+          },
+          "evidence_tier": {
+            "type": "string",
+            "enum": ["measured", "inferred", "conjectural"],
+            "description": "Shared evidence scale (distinct from warrant authority axis). measured = reproducible measurement. inferred = derived from measurement. conjectural = hypothesis, not yet grounded."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open", "corroborated", "retired", "superseded"],
+            "description": "open = claim active. corroborated = ≥2 independent measurements agree. retired = claim withdrawn. superseded = replaced by a newer claim (see superseded_by)."
+          },
+          "convergence_tag": {
+            "type": "string",
+            "enum": ["independent", "propagated", "modal", "n/a"],
+            "description": "Cross-team convergence axis (RESTORED from the brainstorm; orthogonal to evidence_tier). independent = both teams reached it without reading each other AND each cites a forcing measurement (counts toward the two-domain bar). propagated = adopted the other's framing (implementation corroboration). modal = explained by a shared prior/trigger/artifact (~zero credit). n/a = no cross-team interaction yet. Default n/a. Single-claim consistency is schema-checked below; the cross-team checks (shared parents, timing, user-trigger) are the convergence_audit's (the rung 0/2/4 detectors)."
+          },
+          "superseded_by": {
+            "type": "string",
+            "description": "If status is superseded, the id of the claim that replaces this one (F6)."
+          },
+          "last_updated": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO date of last change"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "evidence_tier": {"enum": ["measured", "inferred"]}
+              }
+            },
+            "then": {
+              "required": ["evidence_ref"]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "status": {"const": "superseded"}
+              }
+            },
+            "then": {
+              "required": ["superseded_by"]
+            }
+          },
+          {
+            "if": {
+              "required": ["convergence_tag"],
+              "properties": {
+                "convergence_tag": {"const": "independent"}
+              }
+            },
+            "then": {
+              "properties": {
+                "evidence_tier": {"enum": ["measured", "inferred"]}
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
