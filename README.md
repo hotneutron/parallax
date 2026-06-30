@@ -58,7 +58,7 @@ The daemon finds its config via `PARALLAX_HOME`, else the nearest cwd-ancestor w
 
 `tiers.json` classifies partner work **by `artifact_type`** (`reaction → T1`, `findings →
 T2`, …). Those type *names*, and each type's `default_tier`, are defined once in the shared
-**[`artifact_types`](../artifact_types)** registry — the single source of truth for the type
+**[`artifact_types`](https://github.com/hotneutron/artifact_types)** registry — the single source of truth for the type
 vocabulary. parallax's `tiers.json` is the per-team *instantiation* of those defaults (you can
 override a tier locally); **warrant**'s `policy.json` instantiates the *same* types'
 `default_authority`. Add a type once in the registry and both systems share it — no drift
@@ -72,9 +72,9 @@ between "what the daemon tiers" and "what the checker authorizes".
 
 | repo | governs | per-consumer config |
 |---|---|---|
-| **[artifact_types](../artifact_types)** | the canonical type **vocabulary** — `{type → default_tier, default_authority}` | — (shared) |
+| **[artifact_types](https://github.com/hotneutron/artifact_types)** | the canonical type **vocabulary** — `{type → default_tier, default_authority}` | — (shared) |
 | **parallax** (this) | the cross-team **exchange** (sync, independence enforcement) | `tiers.json` (type → tier) |
-| **[warrant](../warrant)** | each repo's internal **doc authority** (is a declared authority *warranted*?) | `policy.json` (type → authority) |
+| **[warrant](https://github.com/hotneutron/warrant)** | each repo's internal **doc authority** (is a declared authority *warranted*?) | `policy.json` (type → authority) |
 
 **Together.** A team's repo submodules **parallax** (to run the exchange) and **warrant** (to
 validate its own `docs/`), and both draw their type vocabulary from **artifact_types**.
