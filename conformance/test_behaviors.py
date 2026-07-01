@@ -431,6 +431,36 @@ def _graceful(r):
     return r.returncode != 0 and "Traceback (most recent call last)" not in r.stderr
 
 
+# ---- Px: ledger subcommand ----
+@check("P1", "interface", "ledger --recent 1 emits valid JSON summary matching sync_ledger.json head")
+def p1(ad, home, partner, ctx):
+    r = ad.run(home, "ledger", "--recent", "1")
+    if r.returncode != 0:
+        return False
+    try:
+        data = json.loads(r.stdout)
+    except Exception:
+        return False
+    if not isinstance(data.get("total_entries"), int) or "shown" not in data:
+        return False
+    if not isinstance(data.get("entries"), list) or len(data["entries"]) == 0:
+        return False
+    entry = data["entries"][0]
+    return entry.get("head") == ctx["base"]
+
+
+@check("P2", "interface", "ledger --recent 3 returns at most 3 entries")
+def p2(ad, home, partner, ctx):
+    r = ad.run(home, "ledger", "--recent", "3")
+    if r.returncode != 0:
+        return False
+    try:
+        data = json.loads(r.stdout)
+    except Exception:
+        return False
+    return data.get("shown", 999) <= 3
+
+
 @check("E1", "robustness", "unknown command → non-zero, no traceback")
 def e1(ad, home, partner, ctx):
     return _graceful(_raw(ad, home, "bogus-command", "p"))

@@ -17,7 +17,7 @@ import os
 import subprocess
 import sys
 
-CANONICAL = ["detect", "read", "prepare", "relay", "count"]
+CANONICAL = ["detect", "read", "prepare", "relay", "count", "ledger"]
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
