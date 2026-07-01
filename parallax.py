@@ -299,6 +299,37 @@ def cmd_prepare(name, advance=False):
     print("\nFindings:\n[summarize here]\n")
     print("Adopt / Counter / Divergent:\n[element-by-element]\n")
 
+# ── ledger (read-only summary; no schema change) ──
+def cmd_ledger(recent=1, partner_filter=None):
+    """A READABILITY surface over sync_ledger.json: emit a compact per-entry summary of the last
+    `recent` entries. Read-only — no state mutation, no pin advance, no schema change (reads the
+    ledger as-is). Schema-tolerant: the two teams' ledgers diverge (machinery), so every field is
+    resolved with .get() fallbacks and obligation shapes (dict / list) are counted generically."""
+    led = jload(hp("sync_ledger.json"))
+    entries = led.get("entries", [])
+    top_partner = led.get("partner")
+    total = len(entries)
+    sel = entries
+    if partner_filter:
+        sel = [e for e in entries if (e.get("partner") or top_partner) == partner_filter]
+    shown = sel[-recent:] if (recent and recent > 0) else sel
+    def _n(x): return len(x) if isinstance(x, (list, dict)) else 0
+    rows = []
+    for e in shown:
+        msg = e.get("their_head_msg") or e.get("our_head_msg") or ""
+        row = {
+            "date": e.get("date"),
+            "partner": e.get("partner") or top_partner or "?",
+            "head": e.get("their_head") or e.get("our_head") or "?",
+            "msg": (msg[:72] + "…") if len(msg) > 72 else msg,
+            "reviewed": _n(e.get("reviewed")),
+            "obligations": _n(e.get("obligations")),
+        }
+        if "obligations_done" in e:  # ds4m schema carries a done/open split; op's does not
+            row["obligations_done"] = _n(e.get("obligations_done"))
+        rows.append(row)
+    print(json.dumps({"total_entries": total, "shown": len(rows), "entries": rows}, indent=2))
+
 # ── relay (per-path, §3/I4) ──
 def cmd_relay(paths=None):
     # Git operates from the repo ROOT, not home(): home() (PARALLAX_HOME) may be a
@@ -564,7 +595,7 @@ if __name__ == "__main__":
     if h is None or not os.path.exists(os.path.join(h, "partners.json")):
         print("ERROR: no partners.json found — set PARALLAX_HOME or run from a sync home"); sys.exit(1)
     if len(sys.argv) < 2:
-        print("Usage: parallax.py [detect|read|prepare|relay|count|guard|watch|index-diff|div-diff|age-divergences|convergence-audit] [args...]"); sys.exit(2)
+        print("Usage: parallax.py [detect|read|prepare|relay|count|ledger|guard|watch|index-diff|div-diff|age-divergences|convergence-audit] [args...]"); sys.exit(2)
     c = sys.argv[1]; a = sys.argv[2:]
     if c == "detect": cmd_detect(a[0] if a else default_partner())
     elif c == "read":
@@ -578,6 +609,13 @@ if __name__ == "__main__":
             cmd_prepare(a[0] if a else default_partner())
     elif c == "relay": cmd_relay(a[1:] if len(a) > 1 else None)
     elif c == "count": cmd_count(a[0] if a else default_partner())
+    elif c == "ledger":
+        recent = 1; pf = None
+        if "--recent" in a:
+            i = a.index("--recent"); recent = int(a[i + 1]) if i + 1 < len(a) else 1; a = a[:i] + a[i + 2:]
+        if "--partner" in a:
+            i = a.index("--partner"); pf = a[i + 1] if i + 1 < len(a) else None; a = a[:i] + a[i + 2:]
+        cmd_ledger(recent=recent, partner_filter=pf)
     elif c == "guard":
         if not a: print("ERROR: guard requires <path>"); sys.exit(2)
         cmd_guard(a[0])

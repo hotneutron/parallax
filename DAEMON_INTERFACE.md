@@ -36,6 +36,7 @@ root = `git -C <home> rev-parse --show-toplevel`.
 | `prepare <partner> [--advance]` | draft a ledger entry + a one-per-cycle reaction stub; `--advance` fills `reviewed` from the manifest and advances the pin |
 | `relay <partner> <path…>` | emit a relay pointer for committed-clean paths |
 | `count <partner>` | partner-ahead count (a numeric ahead-count, never subjects) |
+| `ledger [--recent N] [--partner P]` | read-only compact summary of the ledger's last `N` entries; no state mutation, no pin advance, no schema change (reads `sync_ledger.json` as-is, schema-tolerant across the teams' divergent ledgers) |
 | `guard <path>` | CLI check: is `<path>` inside a partner repo? (0 = no, 1 = yes) |
 | `watch <partner> [--poll <secs>]` | block on the partner's reflog until HEAD passes the pin, then `detect` (+ `prepare` on obligation), write `_inbox.json`, exit 0 — **never commits/relays** (rung 1) |
 | `index-diff <partner>` | diff the partner's committed `claims_index.json` against the last-pinned copy → `{added, removed, changed}` claim ids for targeted reads; partner reads append to the read-log (I8) (rung 2) |

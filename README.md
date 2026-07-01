@@ -22,6 +22,7 @@ A single script, `parallax.py`, runs the whole exchange between two **local** re
 | `relay <partner> <path…>` | the **commit-before-relay** gate — refuses unless the paths are committed-clean, then emits a pointer carrying our HEAD. |
 | `count <partner>` | partner-ahead commit count (no subjects — embargo-safe). |
 | `prepare <partner>` | auto-draft the ledger entry + a one-per-cycle reaction stub. |
+| `ledger [--recent N] [--partner P]` | **read-only** summary of `sync_ledger.json` — the last `N` entries as compact per-entry rows (`{date, head, msg, reviewed, obligations}`); no state mutation, no pin advance, no schema change (reads the ledger as-is). A readability surface, so extracting the last pin/obligations isn't a 1000-line read. |
 | `guard <path>` / `--read-guard` | the read-guard: blocks any access to a partner repo path outside a sanctioned read (`--read-guard` is the PreToolUse-hook mode). |
 | `watch <partner> [--poll <secs>]` | block on the partner's reflog until HEAD passes the pin, then auto `detect` (+ `prepare` on obligation), write `_inbox.json`, exit 0 — **never commits/relays**. Event-driven via `inotifywait`; `--poll` falls back to polling. The automation tier's rung 1; the per-agent adapters live in `adapters/`. |
 
