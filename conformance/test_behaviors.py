@@ -198,6 +198,23 @@ def b19(ad, home, partner, ctx):
     return findings_ok and brainstorm_ok
 
 
+@check("B20", "classify", "topic-aligned brainstorm promotes T3→T2 with an auditable reason", hard=False)
+def b20(ad, home, partner, ctx):
+    # The fixture gives the reader a recent plan tagged bp1/iss/sim, and the
+    # partner a brainstorm filename carrying bp1/iss/sim. `bp1` is configured as
+    # a stop token, so promotion requires the substantive overlap {iss, sim}.
+    _fixture.set_pin(home, "p", ctx["base"])
+    ad.run(home, "detect", "p")
+    dj = _detect_json(ad, home)
+    if dj is None:
+        return False
+    promoted = any("0006-brainstorm-bp1-iss-sim" in p for p in dj["tiers"].get("2", []))
+    not_t3 = not any("0006-brainstorm-bp1-iss-sim" in p for p in dj["tiers"].get("3", []))
+    draft = json.load(open(os.path.join(home, "_sync_entry_draft.json")))
+    reason = "\n".join(draft.get("to_review", []))
+    return promoted and not_t3 and "topic-aligned" in reason and "iss" in reason and "sim" in reason
+
+
 # ---- I7: zero-obligation is inert ----
 @check("B11", "I7", "zero-obligation sync → obligation:false AND no commit AND no pin-advance")
 # ---- rung 0: addressed_to explicit field (reliable cross-team obligation signal) ----

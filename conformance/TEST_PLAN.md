@@ -92,6 +92,8 @@ see their rows.**
 | B8 | I5 | count emits `%h` only, never subjects | hard | c6 |
 | B9 | classify | a reaction addressed to us → tier 1 (must-read) | hard | c7, on `_detect.json` |
 | B10 ★ | classify | a **shared-contract change** (a `schemas/*` edit) → obligation, not skipped | hard | the bug this guards against; both implementations must surface it, asserted on `_detect.json.obligation` |
+| B19 ★ | classify | artifact-type docs land at their configured tier, not blanket T1 | soft | `_detect.json`: findings→T2, brainstorm→T3; guards the D1 regression class |
+| B20 ★ | classify | topic-aligned brainstorm promotes T3→T2 with an auditable reason | soft | fixture gives reader a recent plan and partner brainstorm sharing two substantive tokens; `_sync_entry_draft.to_review` carries the matched tokens |
 | B11 ★ | I7 | zero-obligation sync → **no commit, no pin-advance** | hard | c8 strengthened: assert `obligation:false` **and** repo HEAD unchanged **and** `last_pinned` unchanged |
 | B12 ★ | rung1 | `watch` (poll mode) fires on HEAD-past-pin → writes `_inbox.json`, exits 0, **never commits** | soft | the automation-tier mechanism; platform-agnostic (`--poll`, no `inotifywait`) |
 | B12b ★ | rung1 | `watch` (POLL path) blocks at HEAD==pin then **catches** a fresh partner commit — cross-platform | soft | end-to-end LCD: block → commit lands → `_inbox.json` written, exit 0 |

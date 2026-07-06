@@ -45,6 +45,14 @@ DEFAULTS = {
                  "PROTOCOL.md","PROTOCOL_INVARIANTS.json","VERSIONS.md",
                  "schemas/","daemon/","spec-tests/","README.md"],
     "contracts": ["schemas/","PROTOCOL.md","PROTOCOL_INVARIANTS.json","VERSIONS.md"],
+    # Topic-alignment promotion (opt-in; None = off, so the default is unchanged). Promotes a partner
+    # `brainstorm` from its default tier to T2 when it shares ≥`min_overlap` SUBSTANTIVE topic tokens
+    # with one of the READER's own recent (≤`days`) `plan` docs — i.e. the partner brainstorm
+    # characterizes a space the reader is *actively* planning in. The topic signal is per-team: a doc's
+    # `tags:` frontmatter if present, else its filename topic segment ({YYMMDD}-{HHMM}-{type}-{topics}).
+    # `stop` drops non-substantive/universal tokens (e.g. the repo tag). The matched tokens are recorded
+    # in the tier reason (auditable). `docs` = the reader's docs dir, relative to the repo root.
+    "promote_brainstorm": None,   # e.g. {"min_overlap":2,"days":14,"docs":"docs","stop":["bp1"]}
 }
 
 def load_tiers():
@@ -69,7 +77,51 @@ def parse_fm(content):
     return atype, parents, addressed_to
 
 
-def classify(rel, content=None, t=None):
+def _topic_tokens(rel, content, stop):
+    """A doc's SUBSTANTIVE topic tokens (per-team signal): its `tags:` frontmatter list if present,
+    else the filename topic segment ({YYMMDD}-{HHMM}-{type}-{topics}.md → the tokens after the type).
+    `stop` (universal/non-substantive tokens, e.g. the repo tag) is dropped."""
+    toks = set()
+    m = re.search(r"^tags:\s*\[([^\]]*)\]", content or "", re.M)
+    if m:
+        toks = {x.strip().strip("\"'").lower() for x in m.group(1).split(",")}
+    else:
+        base = os.path.basename(rel).rsplit(".", 1)[0]
+        toks = {seg.lower() for seg in base.split("-")[3:]}   # drop YYMMDD, HHMM, type
+    return {x for x in toks if x and x not in stop}
+
+
+def _active_plan_topics(cfg):
+    """Union of topic tokens over the READER's own recent (≤`days`) `plan` docs — the spaces the reader
+    is actively planning in. Recency is the filename date (auditable, no git). `None`/missing cfg → set()."""
+    if not cfg:
+        return set()
+    import datetime
+    docs_dir = os.path.join(repo_root(), cfg.get("docs", "docs"))
+    stop = set(cfg.get("stop", []))
+    cutoff = datetime.date.today() - datetime.timedelta(days=cfg.get("days", 14))
+    toks = set()
+    if not os.path.isdir(docs_dir):
+        return toks
+    for name in sorted(os.listdir(docs_dir)):
+        m = re.match(r"(\d{6})-\d{4}-plan-", name)             # the reader's own plan docs
+        if not m:
+            continue
+        try:
+            d = datetime.datetime.strptime(m.group(1), "%y%m%d").date()
+        except ValueError:
+            continue
+        if d < cutoff:
+            continue
+        try:
+            content = open(os.path.join(docs_dir, name), encoding="utf-8").read()
+        except OSError:
+            continue
+        toks |= _topic_tokens(name, content, stop)
+    return toks
+
+
+def classify(rel, content=None, t=None, active=None):
     """(tier, why). artifact_type first, path fallback. `addressed_to: <team>` field
     is the reliable cross-team obligation signal (the parent-based `addressed_to_us`
     heuristic never fired — cross-repo refs in parent_artifacts are forbidden, so a
@@ -85,8 +137,16 @@ def classify(rel, content=None, t=None):
         elif atype in t["addressed"]:
             return 1, f"{atype} — cross-team ask demanding a response"
         if atype in t["atypes"]:
-            kind = "interface-relevant" if t["atypes"][atype] == 2 else "context"
-            return t["atypes"][atype], f"{atype} ({kind})"
+            base = t["atypes"][atype]
+            # Topic-alignment promotion (opt-in): a partner brainstorm that shares ≥min_overlap
+            # substantive topic tokens with one of the reader's recent plans is interface-relevant.
+            pc = t.get("promote_brainstorm")
+            if base == 3 and atype == "brainstorm" and pc and active:
+                overlap = _topic_tokens(rel, content, set(pc.get("stop", []))) & active
+                if len(overlap) >= pc.get("min_overlap", 2):
+                    return 2, f"brainstorm PROMOTED T3→T2 — topic-aligned with an active plan [{', '.join(sorted(overlap))}]"
+            kind = "interface-relevant" if base == 2 else "context"
+            return base, f"{atype} ({kind})"
     for p in t["contracts"]:
         if rel == p or rel.startswith(p): return 2, "shared contract/schema changed — validate + converge"
     if rel.endswith("sync_ledger.json"): return 2, "partner ledger pin"
@@ -183,6 +243,7 @@ def cmd_detect(name):
     print(f"  since {(last or 'first')[:7]}: {len(new)} new commits\n")
     tiers = {1:[],2:[],3:[],4:[]}; seen = set(); unclassified = []; msgs = {}; index_changed = False
     t = load_tiers(); contracts = tuple(t["contracts"])
+    active_topics = _active_plan_topics(t.get("promote_brainstorm"))  # reader's recent-plan topics (topic-alignment)
     def emb_topic(subj, files):
         for e in emb:
             pat = e.get("pattern")
@@ -215,7 +276,7 @@ def cmd_detect(name):
                 continue
             seen.add(f)
             content = gitshow(hsh, f, str(repo)) if is_doc else None
-            tier, why = classify(f, content, t)
+            tier, why = classify(f, content, t, active_topics)
             tiers[tier].append((f, why))
     print(f"\n  TIERS — T1:{len(tiers[1])} must-read  T2:{len(tiers[2])} should  "
           f"T3:{len(tiers[3])} optional  T4:{len(tiers[4])} skipped\n")

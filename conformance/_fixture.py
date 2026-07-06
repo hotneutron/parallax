@@ -15,6 +15,7 @@ After build, docs/0003-stable.md is OVERWRITTEN in the working tree with
 import json
 import os
 import subprocess
+from datetime import date
 
 SECRET = "GATE FAIL corner-coincidence"   # an in-flight verdict that must never leak
 
@@ -53,6 +54,7 @@ def build(tmp):
     _commit(partner, "reaction: addressed to consumer-repo")
     _w(partner, "docs/0004-findings.md", "---\nartifact_type: findings\n---\n# f\n")
     _w(partner, "docs/0005-brainstorm.md", "---\nartifact_type: brainstorm\n---\n# b\n")
+    _w(partner, "docs/0006-brainstorm-bp1-iss-sim.md", "---\nartifact_type: brainstorm\n---\n# aligned\n")
     _commit(partner, "docs: findings + brainstorm (atype-tier fixture)")
     _w(partner, "schemas/partners.schema.json", '{"type": "object"}')
     schema_c = _commit(partner, "fix: schema nullable last_pinned")
@@ -82,12 +84,15 @@ def build(tmp):
     _w(partner, "docs/0003-stable.md", "DIRTY-BODY")          # uncommitted overwrite (B1)
 
     _init(home)
+    plan_name = f"docs/{date.today().strftime('%y%m%d')}-0000-plan-bp1-iss-sim.md"
+    _w(home, plan_name, "---\nartifact_type: plan\ntags: [bp1, iss, sim, plan]\n---\n# active plan\n")
     json.dump({"self_name": "consumer-repo", "self_repo": "consumer-repo", "ledger_filename": "sync_ledger.json",
                "doc_prefix": "docs/", "addressed_to_us_types": ["reaction", "cross_check"],
                "type_tiers": {"findings": 2, "plan": 2, "brainstorm": 3, "reflection": 4},
                "ledger_tier": 2, "trigger_prefixes": ["docs/", "schemas/"],
                "trigger_files": ["sync_ledger.json"], "path_tier4_prefixes": [],
-               "contract_prefixes": ["schemas/"], "contract_tier": 2},
+               "contract_prefixes": ["schemas/"], "contract_tier": 2,
+               "promote_brainstorm": {"min_overlap": 2, "days": 14, "docs": "docs", "stop": ["bp1"]}},
               open(os.path.join(home, "tiers.json"), "w"))
     json.dump({"protocol_version": "0.1.0", "self": {"team_name": "c", "repo": "consumer-repo"},
                "partners": {"p": {"path": partner, "last_pinned": base}}},
