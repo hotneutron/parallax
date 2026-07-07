@@ -215,7 +215,7 @@ def b20(ad, home, partner, ctx):
     return promoted and not_t3 and "topic-aligned" in reason and "iss" in reason and "sim" in reason
 
 
-@check("B21", "classify/I3", "detect emits HEAD-readable rename destinations, not stale source paths", hard=False)
+@check("B21", "classify/I3", "detect emits HEAD-readable rename destinations, not stale source paths")
 def b21(ad, home, partner, ctx):
     _fixture.set_pin(home, "p", ctx["base"])
     ad.run(home, "detect", "p")

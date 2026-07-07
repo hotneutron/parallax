@@ -289,6 +289,7 @@ def cmd_detect(name):
                 if not topic and f not in unclassified:
                     unclassified.append(f)
                 continue
+            # Classify HEAD content: a transient addressed_to removed by HEAD is treated as retracted.
             content = gitshow(head, f, str(repo)) if is_doc else None
             if is_doc and content is None:
                 continue
