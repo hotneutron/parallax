@@ -41,6 +41,7 @@ def rp(rel): return os.path.join(repo_root(), rel)
 # The un-suffixed legacy files are kept as a last-run mirror (single-partner default + existing adapters).
 def _detect_path(name): return hp(f"_detect_{name}.json")
 def _draft_path(name):  return hp(f"_sync_entry_draft_{name}.json")
+def _inbox_path(name):  return hp(f"_inbox_{name}.json")
 
 # ── Tiers config (consumer-configurable, tiers.json overrides) ──
 DEFAULTS = {
@@ -577,15 +578,16 @@ def cmd_watch(name, poll=None):
                             "-e", "close_write", str(reflog)], capture_output=True)
         else:
             time.sleep(interval)
-    cmd_detect(name)                  # sanctioned: writes _detect.json + _sync_entry_draft.json
-    dj = jload(hp("_detect.json"))
+    cmd_detect(name)                  # sanctioned: writes per-partner + legacy detect/draft
+    dj = jload(_detect_path(name)) or {}   # THIS partner's record (not the shared last-run mirror)
     obligation = bool(dj.get("obligation"))
     if obligation:
         cmd_prepare(name)             # auto-draft the ledger entry + reaction stub
     inbox = {"event": "partner-head-change", "partner": name, "their_head": dj.get("their_head"),
-             "obligation": obligation, "draft": "_sync_entry_draft.json" if obligation else None,
-             "detect": "_detect.json", "at": date.today().isoformat()}
-    jsave(hp("_inbox.json"), inbox)
+             "obligation": obligation,
+             "draft": (os.path.basename(_draft_path(name)) if obligation else None),
+             "detect": os.path.basename(_detect_path(name)), "at": date.today().isoformat()}
+    jsave(_inbox_path(name), inbox);  jsave(hp("_inbox.json"), inbox)   # per-partner + legacy mirror
     print(json.dumps(inbox, separators=(",", ":")))   # machine-readable summary (last line)
     # exit 0 — never commit/relay; the operator/agent owns the sweeps + the decision
 
@@ -604,6 +606,9 @@ def cmd_index_diff(name):
         return
     current = json.loads(index)
     pinned = cfg.get("last_pinned") if (cfg := partner(name)[0]) else None
+    if pinned and not pin_reachable(pinned, repo):   # same class as detect/count: never silently mishandle a stale pin
+        print(f"⚠ pin {pinned[:7]} UNREACHABLE in {name} (rebase/history-rewrite?) — diffing against EMPTY (all claims read as 'added'); re-pin")
+        pinned = None
     prev = _logged_gitshow(name, pinned, "claims_index.json", str(repo)) if pinned else None
     prev_entries = json.loads(prev).get("entries", []) if prev else []
     cur_ids = {e["id"] for e in current.get("entries", [])}
