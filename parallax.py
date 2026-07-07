@@ -35,6 +35,13 @@ def repo_root():
 
 def rp(rel): return os.path.join(repo_root(), rel)
 
+# Per-partner scratch state (multi-partner detect): detect/read/prepare key their ephemeral scratch by
+# partner so a second partner's session can't clobber the first (the single _detect.json / _sync_entry_
+# draft.json were overwritten across partners → prepare mixed one partner's obligations with another's).
+# The un-suffixed legacy files are kept as a last-run mirror (single-partner default + existing adapters).
+def _detect_path(name): return hp(f"_detect_{name}.json")
+def _draft_path(name):  return hp(f"_sync_entry_draft_{name}.json")
+
 # ── Tiers config (consumer-configurable, tiers.json overrides) ──
 DEFAULTS = {
     "self_name": "",                     # consumer's repo id, for addressed-to-us (e.g. your repo name)
@@ -328,14 +335,16 @@ def cmd_detect(name):
         print(f"\n  ↳ claims_index.json changed — run `index-diff {name}` to diff claims (the funnel)")
     to_review = [f"{f} [T{ti}] — {why}" for ti in (1, 2) for f, why in tiers[ti]]
     hmsg = emb_topic(msgs.get(head, ""), [])
-    jsave(hp("_sync_entry_draft.json"), {"date":date.today().isoformat(),"partner":name,
-          "their_head":head,"their_head_msg":(f"[EMBARGOED: {hmsg}]" if hmsg else msgs.get(head,"?")),
-          "to_review":to_review,"tier_counts":{str(k):len(v) for k,v in tiers.items()}})
-    jsave(hp("_detect.json"), {"partner":name,"their_head":head,
-         "pinned":last if last != "(first sync)" else None,
-         "tiers":{str(k):[f for f,_ in v] for k,v in tiers.items()},
-         "unclassified":unclassified,
-         "obligation":obligation,"next":nxt,"tier3_unread":len(tiers[3])})
+    draft = {"date":date.today().isoformat(),"partner":name,
+             "their_head":head,"their_head_msg":(f"[EMBARGOED: {hmsg}]" if hmsg else msgs.get(head,"?")),
+             "to_review":to_review,"tier_counts":{str(k):len(v) for k,v in tiers.items()}}
+    det = {"partner":name,"their_head":head,
+           "pinned":last if last != "(first sync)" else None,
+           "tiers":{str(k):[f for f,_ in v] for k,v in tiers.items()},
+           "unclassified":unclassified,
+           "obligation":obligation,"next":nxt,"tier3_unread":len(tiers[3])}
+    jsave(_draft_path(name), draft);  jsave(hp("_sync_entry_draft.json"), draft)  # per-partner + legacy mirror
+    jsave(_detect_path(name), det);   jsave(hp("_detect.json"), det)
     if obligation:
         print(f"\n  OBLIGATION (T1/T2): read the paths, then `prepare {name}` → "
               f"one reaction + ledger, one commit")
@@ -351,10 +360,11 @@ def cmd_read(name, path):
         print(f"ERROR: cannot read {path} at HEAD {head[:7]}"); sys.exit(1)
     now = date.today().isoformat()
     entry = {"ref":path,"at":now,"partner":name,"partner_head":head,"tier":classify(path,content)}
-    d = jload(hp("_sync_entry_draft.json")) or {"date":now,"to_review":[],"reviewed":[],"reads":[]}
+    d = jload(_draft_path(name)) or {"date":now,"partner":name,"to_review":[],"reviewed":[],"reads":[]}
+    d["partner"] = name  # the read is recorded under the partner that served it (the multi-partner fix)
     d.setdefault("reads",[]).append(entry)
     d.setdefault("reviewed",[]).append(f"{path} [logged at {now}]")
-    jsave(hp("_sync_entry_draft.json"), d)
+    jsave(_draft_path(name), d);  jsave(hp("_sync_entry_draft.json"), d)  # per-partner + legacy mirror
     m = jload(hp("_parallax_read_log.json")) or {}
     m.setdefault("reads",[]).append(entry)
     jsave(hp("_parallax_read_log.json"), m)
@@ -362,10 +372,17 @@ def cmd_read(name, path):
 
 # ── prepare ──
 def cmd_prepare(name, advance=False):
-    dpath = hp("_sync_entry_draft.json")
+    dpath = _draft_path(name)
     if not os.path.exists(dpath):
-        print("ERROR: no detect draft — run detect first"); sys.exit(2)
+        # backward compat: the legacy single-partner draft, but ONLY if it is this partner's.
+        legacy = hp("_sync_entry_draft.json")
+        if os.path.exists(legacy) and (jload(legacy) or {}).get("partner") == name:
+            dpath = legacy
+        else:
+            print(f"ERROR: no detect draft for {name} — run `detect {name}` first"); sys.exit(2)
     d = jload(dpath)
+    if d.get("partner") and d["partner"] != name:  # never emit another partner's stub (the contamination guard)
+        print(f"ERROR: draft {os.path.basename(dpath)} is for {d['partner']}, not {name}"); sys.exit(2)
     standing = []
     ledger = jload(hp("sync_ledger.json"))
     if ledger.get("entries"): standing = ledger["entries"][-1].get("obligations",[])
@@ -387,6 +404,39 @@ def cmd_prepare(name, advance=False):
     print("\nStanding Obligations:")
     for s in standing: print(f"  - {s}")
     print("\nFindings:\n[summarize here]\n")
+    print("Adopt / Counter / Divergent:\n[element-by-element]\n")
+
+def cmd_prepare_all(advance=False):
+    """Combined prepare across every partner with a current per-partner draft — the interleaved
+    `detect A; detect B → read → ONE combined A+B reaction → one commit` cadence. Scans the per-partner
+    scratch files (no keyed schema needed); each partner gets its own section in one stub."""
+    names = list(jload(hp("partners.json")).get("partners", {}).keys())
+    drafts = [(n, jload(_draft_path(n))) for n in names if os.path.exists(_draft_path(n))]
+    if not drafts:
+        print("ERROR: no per-partner detect drafts — run `detect <partner>` first"); sys.exit(2)
+    if advance:
+        pj = jload(hp("partners.json"))
+        for n, d in drafts:
+            if n in pj.get("partners", {}) and d.get("their_head"):
+                pj["partners"][n]["last_pinned"] = d["their_head"]
+                pj["partners"][n]["last_sync"] = date.today().isoformat()
+        jsave(hp("partners.json"), pj)
+        print("Pins advanced: " + ", ".join(f"{n}→{d.get('their_head','?')[:7]}" for n, d in drafts))
+        return
+    standing = []
+    ledger = jload(hp("sync_ledger.json"))
+    if ledger.get("entries"): standing = ledger["entries"][-1].get("obligations", [])
+    print(f"# Reaction — opus combined sync ({len(drafts)} partners: {', '.join(n for n, _ in drafts)})\n")
+    for n, d in drafts:
+        print(f"## {n} @ {d.get('their_head', '?')[:7]}")
+        print("To review:")
+        for r in d.get("to_review", []): print(f"  - {r}")
+        print("Reviewed (from read manifest):")
+        for r in d.get("reviewed", []): print(f"  - {r}")
+        print()
+    print("Standing Obligations:")
+    for s in standing: print(f"  - {s}")
+    print("\nFindings:\n[summarize across partners]\n")
     print("Adopt / Counter / Divergent:\n[element-by-element]\n")
 
 # ── ledger (read-only summary; no schema change) ──
@@ -694,11 +744,12 @@ if __name__ == "__main__":
         if len(a) < 2: print("ERROR: read requires <partner> <path>"); sys.exit(2)
         cmd_read(a[0], a[1])
     elif c == "prepare":
-        if "--advance" in a:
-            a.remove("--advance")
-            cmd_prepare(a[0] if a else default_partner(), advance=True)
+        adv = "--advance" in a
+        if adv: a.remove("--advance")
+        if "--all" in a or (a and a[0] == "all"):   # combined stub across all partner drafts
+            cmd_prepare_all(advance=adv)
         else:
-            cmd_prepare(a[0] if a else default_partner())
+            cmd_prepare(a[0] if a else default_partner(), advance=adv)
     elif c == "relay": cmd_relay(a[1:] if len(a) > 1 else None)
     elif c == "count": cmd_count(a[0] if a else default_partner())
     elif c == "ledger":
