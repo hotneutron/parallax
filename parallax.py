@@ -214,6 +214,21 @@ def phead(repo):
     h = git("rev-parse HEAD", str(repo))
     return h[0][:40] if h else "?"
 
+def changed_paths(commit, repo):
+    """Return commit paths normalized to HEAD-readable follow-up targets."""
+    out = git(f"diff-tree --no-commit-id --name-status -r -M {commit}", repo)
+    paths = []
+    for line in out:
+        parts = line.split("\t")
+        if not parts:
+            continue
+        status = parts[0]
+        if (status.startswith("R") or status.startswith("C")) and len(parts) >= 3:
+            paths.append(parts[2])
+        elif len(parts) >= 2:
+            paths.append(parts[1])
+    return paths
+
 def default_partner():
     """The partner to act on when none is named on the command line: the sole
     configured partner, read from partners.json. Never assume a specific repo —
@@ -255,7 +270,7 @@ def cmd_detect(name):
     for line in reversed(new):
         hsh, subj = (line.split(" ", 1) + [""])[:2]
         msgs[hsh] = subj
-        changed = git(f"diff-tree --no-commit-id --name-only -r {hsh}", str(repo))
+        changed = changed_paths(hsh, str(repo))
         if "claims_index.json" in changed: index_changed = True  # rung 2: suggest index-diff
         topic = emb_topic(subj, changed)
         rs = f"[EMBARGOED: {topic}]" if topic else subj
@@ -274,8 +289,10 @@ def cmd_detect(name):
                 if not topic and f not in unclassified:
                     unclassified.append(f)
                 continue
+            content = gitshow(head, f, str(repo)) if is_doc else None
+            if is_doc and content is None:
+                continue
             seen.add(f)
-            content = gitshow(hsh, f, str(repo)) if is_doc else None
             tier, why = classify(f, content, t, active_topics)
             tiers[tier].append((f, why))
     print(f"\n  TIERS — T1:{len(tiers[1])} must-read  T2:{len(tiers[2])} should  "
