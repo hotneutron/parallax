@@ -229,6 +229,21 @@ def b21(ad, home, partner, ctx):
     return has_new and not has_old and read_new
 
 
+@check("B22", "detect", "an UNREACHABLE last_pinned is flagged + surfaces commits, never silent 'no new commits'")
+def b22(ad, home, partner, ctx):
+    # Bug #2: a pin that isn't a real commit (rebase/history-rewrite artifact) makes `git log <pin>..HEAD`
+    # fail → git() swallows to [] → detect FALSELY reports "no new commits", masking every partner commit.
+    _fixture.set_pin(home, "p", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")  # 40-hex SHA absent from the repo
+    r = ad.run(home, "detect", "p")
+    if "no new commits" in r.stdout.lower():
+        return False  # the buggy behaviour — silent masking
+    # the fix must WARN that the pin is unreachable AND still surface the commits (never silently empty).
+    warned = any(w in r.stdout.lower() for w in ("unreachable", "stale", "re-pin"))
+    dj = _detect_json(ad, home)
+    surfaced = dj is not None and any(dj["tiers"].get(str(t), []) for t in (1, 2, 3, 4))
+    return warned and surfaced
+
+
 # ---- I7: zero-obligation is inert ----
 @check("B11", "I7", "zero-obligation sync → obligation:false AND no commit AND no pin-advance")
 # ---- rung 0: addressed_to explicit field (reliable cross-team obligation signal) ----

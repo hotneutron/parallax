@@ -169,6 +169,13 @@ def git(cmd, repo=None):
     r = subprocess.run(args, capture_output=True, text=True)
     return [l for l in r.stdout.strip().split("\n") if l] if r.returncode == 0 else []
 
+def pin_reachable(last, repo):
+    """True if `last` is a real commit reachable in `repo` (None/empty ⇒ vacuously ok, a first sync).
+    Guards the silent-'no new commits' bug (#2): an unreachable pin — a rebase/history-rewrite artifact —
+    makes `git log <last>..HEAD` fail, which git() swallows to [], reporting a FALSE 'no new commits' and
+    masking every partner commit. `rev-parse --verify -q` returns the SHA iff `last` resolves to a commit."""
+    return not last or bool(git(f"rev-parse --verify -q {last}^{{commit}}", str(repo)))
+
 def gitshow(c, path, repo):
     lines = git(f"show {c}:{path}", repo)
     return "\n".join(lines) if lines else None
@@ -250,7 +257,11 @@ def cmd_detect(name):
     if head == "?": print(f"ERROR: cannot read partner repo"); sys.exit(1)
     commits = git("log --oneline HEAD", str(repo))
     last = cfg.get("last_pinned")
-    new = git(f"log --oneline {last}..HEAD", str(repo)) if last else commits[:20]
+    if last and not pin_reachable(last, repo):
+        print(f"⚠ pin {last[:7]} UNREACHABLE in {name} (rebase/history-rewrite?) — showing ALL commits; re-pin after review")
+        new = commits[:20]
+    else:
+        new = git(f"log --oneline {last}..HEAD", str(repo)) if last else commits[:20]
     emb = active_embargoes()
     if not new:
         print(f"Partner {name}: no new commits since {(last or '?')[:7]}"); return
@@ -443,11 +454,13 @@ def cmd_count(name):
     head = phead(repo)
     if head == "?": print(f"ERROR: cannot read partner repo"); sys.exit(1)
     last = cfg.get("last_pinned")
-    n = len(git(f"log --oneline {last}..HEAD", str(repo))) if last else 0
+    pin_ok = pin_reachable(last, repo)
+    n = len(git(f"log --oneline {last}..HEAD", str(repo))) if (last and pin_ok) else 0
     print(f"Partner: {name} ({cfg.get('team_name','?')})")
     print(f"  Last synced: {cfg.get('last_sync','?')} (pinned {(last or '?')[:7]})")
     print(f"  New commits since: {n}  Partner HEAD: {head[:7]}")
-    if n: print(f"  Status: sync recommended ({n} unread)")
+    if last and not pin_ok: print(f"  Status: ⚠ pin unreachable (rebase/history-rewrite?) — re-pin")
+    elif n: print(f"  Status: sync recommended ({n} unread)")
     else: print(f"  Status: up to date")
 
 # ── guard ──
