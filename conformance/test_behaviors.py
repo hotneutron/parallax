@@ -215,6 +215,20 @@ def b20(ad, home, partner, ctx):
     return promoted and not_t3 and "topic-aligned" in reason and "iss" in reason and "sim" in reason
 
 
+@check("B21", "classify/I3", "detect emits HEAD-readable rename destinations, not stale source paths")
+def b21(ad, home, partner, ctx):
+    _fixture.set_pin(home, "p", ctx["base"])
+    ad.run(home, "detect", "p")
+    dj = _detect_json(ad, home)
+    if dj is None:
+        return False
+    surfaced = sum((dj["tiers"].get(str(t), []) for t in (1, 2, 3, 4)), [])
+    has_new = any("docs/0007-plan-new.md" == p for p in surfaced)
+    has_old = any("docs/0007-plan-old.md" == p for p in surfaced)
+    read_new = ad.run(home, "read", "p", "docs/0007-plan-new.md").returncode == 0
+    return has_new and not has_old and read_new
+
+
 # ---- I7: zero-obligation is inert ----
 @check("B11", "I7", "zero-obligation sync → obligation:false AND no commit AND no pin-advance")
 # ---- rung 0: addressed_to explicit field (reliable cross-team obligation signal) ----

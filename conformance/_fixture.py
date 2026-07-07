@@ -56,6 +56,15 @@ def build(tmp):
     _w(partner, "docs/0005-brainstorm.md", "---\nartifact_type: brainstorm\n---\n# b\n")
     _w(partner, "docs/0006-brainstorm-bp1-iss-sim.md", "---\nartifact_type: brainstorm\n---\n# aligned\n")
     _commit(partner, "docs: findings + brainstorm (atype-tier fixture)")
+    _w(partner, "docs/0007-plan-old.md", "---\nartifact_type: plan\n---\n# old plan v1\n")
+    _commit(partner, "plan: add old-named plan")
+    _w(partner, "docs/0007-plan-old.md", "---\nartifact_type: plan\n---\n# old plan v2\n")
+    _commit(partner, "plan: revise old-named plan")
+    os.rename(
+        os.path.join(partner, "docs", "0007-plan-old.md"),
+        os.path.join(partner, "docs", "0007-plan-new.md"),
+    )
+    _commit(partner, "plan: rename old plan to new plan")
     _w(partner, "schemas/partners.schema.json", '{"type": "object"}')
     schema_c = _commit(partner, "fix: schema nullable last_pinned")
     _w(partner, "docs/0003-stable.md", "COMMITTED-BODY")
