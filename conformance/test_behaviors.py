@@ -296,6 +296,60 @@ def b24(ad, home, partner, ctx):
             and "p @" in r.stdout and "q @" in r.stdout)
 
 
+@check("B25", "rung1", "watch keeps per-partner inboxes: watch A; watch B leaves A's inbox intact", hard=False)
+def b25(ad, home, partner, ctx):
+    _fixture.set_pin(home, "p", ctx["base"])
+    _add_second_partner(home, partner)
+
+    def watch(name):
+        try:
+            return subprocess.run([ad.python, ad.daemon, "watch", name, "--poll", "1"], cwd=home,
+                                  env={**os.environ, "PARALLAX_HOME": home},
+                                  capture_output=True, text=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            return None
+
+    rp = watch("p")
+    if rp is None:
+        return False
+    if rp.returncode == 2 and "Unknown" in (rp.stdout + rp.stderr):
+        return None
+    p_inbox = os.path.join(home, "_inbox_p.json")
+    if rp.returncode != 0 or not os.path.exists(p_inbox):
+        return False
+    p_before = json.load(open(p_inbox))
+
+    rq = watch("q")
+    if rq is None or rq.returncode != 0:
+        return False
+    q_inbox = os.path.join(home, "_inbox_q.json")
+    if not os.path.exists(p_inbox) or not os.path.exists(q_inbox):
+        return False
+    p_after = json.load(open(p_inbox))
+    q_after = json.load(open(q_inbox))
+    legacy = json.load(open(os.path.join(home, "_inbox.json")))
+    return (p_before == p_after and p_after.get("partner") == "p"
+            and q_after.get("partner") == "q" and legacy.get("partner") == "q"
+            and p_after.get("detect") == "_detect_p.json"
+            and q_after.get("detect") == "_detect_q.json")
+
+
+@check("B26", "rung2", "index-diff flags an unreachable pin instead of silently treating all claims as added", hard=False)
+def b26(ad, home, partner, ctx):
+    old_pin = _fixture.get_pin(home, "p")
+    _fixture.set_pin(home, "p", "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+    try:
+        r = subprocess.run([ad.python, ad.daemon, "index-diff", "p"], cwd=home,
+                           env={**os.environ, "PARALLAX_HOME": home},
+                           capture_output=True, text=True, timeout=10)
+    finally:
+        _fixture.set_pin(home, "p", old_pin)
+    if r.returncode == 2 and "Unknown" in (r.stdout + r.stderr):
+        return None
+    out = (r.stdout + r.stderr).lower()
+    return r.returncode == 0 and "unreachable" in out and "re-pin" in out
+
+
 # ---- I7: zero-obligation is inert ----
 @check("B11", "I7", "zero-obligation sync → obligation:false AND no commit AND no pin-advance")
 # ---- rung 0: addressed_to explicit field (reliable cross-team obligation signal) ----

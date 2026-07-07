@@ -98,6 +98,8 @@ see their rows.**
 | B22 ★ | detect | an **unreachable** `last_pinned` is flagged + still surfaces commits, never a silent "no new commits" (bug #2) | hard | fixture sets a bogus 40-hex pin; asserts detect does not print "no new commits", warns (unreachable/re-pin), and `_detect.json` surfaces commits |
 | B23 ★ | detect/prepare | per-partner drafts: `prepare A` is not clobbered by `detect B` | hard | fixture adds a second partner with a distinct HEAD; asserts `detect p; detect q; prepare p` emits p's HEAD, not q's |
 | B24 ★ | detect/prepare | `prepare --all` emits one combined stub carrying multiple partner drafts | hard | fixture adds a second partner; asserts `detect p; detect q; prepare --all` emits both partner sections |
+| B25 ★ | rung1 | `watch A; watch B` leaves A's per-partner inbox intact | soft | fixture adds a second partner; asserts `_inbox_p.json` survives `watch q` and `_inbox_q.json`/legacy mirror point to q |
+| B26 ★ | rung2 | `index-diff` with an unreachable `last_pinned` warns instead of silently treating every claim as added | soft | fixture sets a bogus 40-hex pin; asserts `index-diff p` emits unreachable/re-pin warning |
 | B11 ★ | I7 | zero-obligation sync → **no commit, no pin-advance** | hard | c8 strengthened: assert `obligation:false` **and** repo HEAD unchanged **and** `last_pinned` unchanged |
 | B12 ★ | rung1 | `watch` (poll mode) fires on HEAD-past-pin → writes `_inbox.json`, exits 0, **never commits** | soft | the automation-tier mechanism; platform-agnostic (`--poll`, no `inotifywait`) |
 | B12b ★ | rung1 | `watch` (POLL path) blocks at HEAD==pin then **catches** a fresh partner commit — cross-platform | soft | end-to-end LCD: block → commit lands → `_inbox.json` written, exit 0 |
