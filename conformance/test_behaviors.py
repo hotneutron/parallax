@@ -41,6 +41,35 @@ def _detect_json(ad, home):
     return json.load(open(p)) if os.path.exists(p) else None
 
 
+def _add_second_partner(home, partner):
+    """Add a second synthetic partner with a distinct HEAD so prepare output can
+    prove it used the requested partner's draft, not the last detect mirror."""
+    q = os.path.join(os.path.dirname(partner), "partner_q")
+    if os.path.exists(q):
+        shutil.rmtree(q)
+    os.makedirs(q, exist_ok=True)
+    subprocess.run(["git", "-C", q, "init", "-q"], check=True)
+    subprocess.run(["git", "-C", q, "config", "user.email", "t@t.t"], check=True)
+    subprocess.run(["git", "-C", q, "config", "user.name", "t"], check=True)
+    os.makedirs(os.path.join(q, "docs"), exist_ok=True)
+    open(os.path.join(q, "docs", "0001.md"), "w").write("q seed")
+    subprocess.run(["git", "-C", q, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", q, "commit", "-qm", "q seed"], check=True)
+    q_base = subprocess.run(["git", "-C", q, "rev-parse", "--short", "HEAD"],
+                            check=True, capture_output=True, text=True).stdout.strip()
+    open(os.path.join(q, "docs", "0002-reaction.md"), "w").write(
+        "---\nartifact_type: reaction\naddressed_to: consumer-repo\n---\n# q reaction\n")
+    subprocess.run(["git", "-C", q, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", q, "commit", "-qm", "q reaction"], check=True)
+    q_head = subprocess.run(["git", "-C", q, "rev-parse", "HEAD"],
+                            check=True, capture_output=True, text=True).stdout.strip()
+    pj_path = os.path.join(home, "partners.json")
+    pj = json.load(open(pj_path))
+    pj["partners"]["q"] = {"path": q, "last_pinned": q_base}
+    json.dump(pj, open(pj_path, "w"))
+    return q, q_head
+
+
 # ---- I3: reads are committed-only, logged, guarded ----
 @check("B1", "I3", "read serves COMMITTED content (stdout), not the working tree")
 def b1(ad, home, partner, ctx):
@@ -242,6 +271,29 @@ def b22(ad, home, partner, ctx):
     dj = _detect_json(ad, home)
     surfaced = dj is not None and any(dj["tiers"].get(str(t), []) for t in (1, 2, 3, 4))
     return warned and surfaced
+
+
+@check("B23", "detect/prepare", "per-partner drafts: prepare A is not clobbered by detect B")
+def b23(ad, home, partner, ctx):
+    _fixture.set_pin(home, "p", ctx["base"])
+    _, q_head = _add_second_partner(home, partner)
+    p_head = git(partner, "rev-parse", "HEAD").strip()
+    ad.run(home, "detect", "p")
+    ad.run(home, "detect", "q")
+    r = ad.run(home, "prepare", "p")
+    return r.returncode == 0 and p_head in r.stdout and q_head not in r.stdout
+
+
+@check("B24", "detect/prepare", "prepare --all emits one combined stub carrying multiple partner drafts")
+def b24(ad, home, partner, ctx):
+    _fixture.set_pin(home, "p", ctx["base"])
+    _, q_head = _add_second_partner(home, partner)
+    p_head = git(partner, "rev-parse", "HEAD").strip()
+    ad.run(home, "detect", "p")
+    ad.run(home, "detect", "q")
+    r = ad.run(home, "prepare", "--all")
+    return (r.returncode == 0 and p_head[:7] in r.stdout and q_head[:7] in r.stdout
+            and "p @" in r.stdout and "q @" in r.stdout)
 
 
 # ---- I7: zero-obligation is inert ----
