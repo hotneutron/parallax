@@ -33,12 +33,12 @@ root = `git -C <home> rev-parse --show-toplevel`.
 |---|---|
 | `detect <partner>` | list new partner commits, classify, write the result file (§4) |
 | `read <partner> <path>` | read `partner@HEAD:path` into quarantine + manifest |
-| `prepare <partner> [--advance]` | draft a ledger entry + a one-per-cycle reaction stub; `--advance` fills `reviewed` from the manifest and advances the pin |
+| `prepare <partner> [--advance]` / `prepare --all [--advance]` | draft a ledger entry + a one-per-cycle reaction stub; `--advance` fills `reviewed` from the manifest and advances the pin; `--all` (or `prepare all`) drafts **one combined stub across every partner** with a current per-partner draft — the interleaved multi-partner `detect A; detect B → one reaction` cadence (with `--advance`, advances every drafted partner's pin) |
 | `relay <partner> <path…>` | emit a relay pointer for committed-clean paths |
 | `count <partner>` | partner-ahead count (a numeric ahead-count, never subjects) |
 | `ledger [--recent N] [--partner P]` | read-only compact summary of the ledger's last `N` entries; no state mutation, no pin advance, no schema change (reads `sync_ledger.json` as-is, schema-tolerant across the teams' divergent ledgers) |
 | `guard <path>` | CLI check: is `<path>` inside a partner repo? (0 = no, 1 = yes) |
-| `watch <partner> [--poll <secs>]` | block on the partner's reflog until HEAD passes the pin, then `detect` (+ `prepare` on obligation), write `_inbox.json`, exit 0 — **never commits/relays** (rung 1) |
+| `watch <partner> [--poll <secs>]` | block on the partner's reflog until HEAD passes the pin, then `detect` (+ `prepare` on obligation), write `_inbox_<partner>.json`, exit 0 — **never commits/relays** (rung 1) |
 | `index-diff <partner>` | diff the partner's committed `claims_index.json` against the last-pinned copy → `{added, removed, changed}` claim ids for targeted reads; partner reads append to the read-log (I8) (rung 2) |
 | `div-diff <partner>` | diff our `divergences.*` against the partner's over **recent ∪ archived** (aging-robust) → `{only_ours, only_theirs, disagree, aging_mismatch}`; partner reads append to the read-log (I8) (rung 3) |
 | `age-divergences` | local housekeeping: archive resolved/open entries past the `aging` thresholds (days from `last_updated`) into `divergences.archived.*.json` — no partner read (rung 3) |
@@ -59,8 +59,10 @@ the sanctioned-access escape hatch). One file, automatic enforcement.
 
 ## 4. Machine-readable detect result
 
-`detect` writes `<home>/_detect.json` so the suite asserts on structure, not
-wording:
+`detect` writes `<home>/_detect_<partner>.json` (per-partner, so concurrent
+partner cycles don't clobber each other; a single-slot `_detect.json` legacy
+mirror carries the **last run only** — read the per-partner file in multi-partner
+flows) so the suite asserts on structure, not wording:
 
 ```json
 { "partner": "...", "their_head": "...", "pinned": "...",
@@ -73,7 +75,8 @@ wording:
 **every** tier-1 and tier-2 path, then `prepare` iff there is an obligation — so
 a script can discharge the cycle without re-reading prose. The conformance suite
 keys its classify / zero-obligation checks on this file, never on stdout strings.
-`_detect.json` validates against `conformance/_detect_schema.json`.
+The per-partner `_detect_<partner>.json` (and its `_detect.json` legacy mirror)
+validates against `conformance/_detect_schema.json`.
 
 ## 5. read / relay effects
 
