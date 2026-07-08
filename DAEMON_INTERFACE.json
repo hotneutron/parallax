@@ -54,7 +54,8 @@
         "2": "usage"
       },
       "flags": {
-        "--advance": "fill reviewed from the manifest + advance the pin in-tree"
+        "--advance": "fill reviewed from the manifest + advance the pin in-tree",
+        "--all": "combined ledger-entry stub across ALL partners with a current per-partner draft (positional form 'prepare all' also accepted) — the interleaved 'detect A; detect B -> one combined reaction' cadence; with --advance, advances every drafted partner's pin. Scans the per-partner draft scratch files."
       }
     },
     "relay": {
@@ -91,6 +92,62 @@
         "0": "success"
       },
       "emits": "read-only JSON summary of the last N ledger entries {total_entries, shown, entries:[{date,partner,head,msg,reviewed,obligations}]}; no mutation, no pin advance, no schema change"
+    },
+    "watch": {
+      "argv": [
+        "watch",
+        "{partner}",
+        "[--poll {secs}]"
+      ],
+      "exit": {
+        "0": "success (partner HEAD passed the pin; inbox written)",
+        "1": "partner not found / repo missing"
+      },
+      "blocks_until": "the partner HEAD passes the pin (reflog-driven; --poll falls back to polling where no file-watcher exists)",
+      "then": "runs detect (+ prepare on obligation), writes inbox, exits 0 — NEVER commits or relays",
+      "writes": "inbox",
+      "rung": 1,
+      "optional_capability": true
+    },
+    "index-diff": {
+      "argv": [
+        "index-diff",
+        "{partner}"
+      ],
+      "exit": {
+        "0": "success",
+        "1": "partner not found"
+      },
+      "emits": "{added, removed, changed} claim ids vs the last-pinned claims_index.json (warns + diffs against empty if the pin is unreachable)",
+      "appends": "manifest (each partner read is I8-logged, like read)",
+      "rung": 2,
+      "optional_capability": true
+    },
+    "div-diff": {
+      "argv": [
+        "div-diff",
+        "{partner}"
+      ],
+      "exit": {
+        "0": "success",
+        "1": "partner not found"
+      },
+      "emits": "{only_ours, only_theirs, disagree, aging_mismatch} over recent + archived divergences (aging-robust)",
+      "appends": "manifest (each partner read is I8-logged, like read)",
+      "rung": 3,
+      "optional_capability": true
+    },
+    "age-divergences": {
+      "argv": [
+        "age-divergences"
+      ],
+      "exit": {
+        "0": "success"
+      },
+      "emits": "local housekeeping — archive resolved/open divergences past the aging thresholds into divergences.archived.*.json; NO partner read",
+      "mutates_committed_state": false,
+      "rung": 3,
+      "optional_capability": true
     }
   },
   "exit_codes": {
@@ -100,6 +157,8 @@
   },
   "detect_result": {
     "file": "_detect.json",
+    "per_partner_file": "_detect_{partner}.json",
+    "partner_substitution": "{partner} is replaced by the partner argument — the SAME token substituted in subcommands.*.argv. `file` is the single-slot last-run mirror (always mechanically resolvable, correct for a single-partner cycle); multi-partner consumers MUST resolve `per_partner_file` per partner to avoid cross-partner contamination.",
     "validating_schema": "conformance/_detect_schema.json",
     "shape": {
       "partner": "str",
@@ -114,6 +173,10 @@
   "effects": {
     "manifest": "_parallax_read_log.json",
     "entry_draft": "_sync_entry_draft.json",
+    "entry_draft_per_partner": "_sync_entry_draft_{partner}.json",
+    "inbox": "_inbox.json",
+    "inbox_per_partner": "_inbox_{partner}.json",
+    "per_partner_note": "detect_result / entry_draft / inbox each write a per-partner file (_*_{partner}.json) AND a single-slot legacy mirror (_*.json, last run only). The base effect names here are the MIRRORS (always mechanically resolvable, no substitution); resolve the *_per_partner names in multi-partner flows. {partner} = the argv partner token (see detect_result.partner_substitution).",
     "draft_semantics": "to_review filled at detect (classified); reviewed filled at prepare (actually-read, from the manifest) \u2014 2a",
     "sync_flag": ".parallax_sync_mode",
     "relay_pointer": "_relay.json",
