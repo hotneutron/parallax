@@ -11,10 +11,12 @@ Usage: python3 test_interface.py [--daemon PATH] [--adapter DECL.json]
 """
 import json
 import os
+import re
 import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import _adapter
 import _fixture
@@ -33,6 +35,15 @@ def check(cid, name, hard=True):
 def _wrote_detect_for_p(ad, home):
     p = ad.detect_result_path(home)
     return os.path.exists(p) and json.load(open(p)).get("partner") == "p"
+
+
+def _decl():
+    path = os.path.join(ROOT, "DAEMON_INTERFACE.json")
+    return json.load(open(path)) if os.path.exists(path) else None
+
+
+def _template_path(home, template, partner):
+    return os.path.join(home, template.replace("{partner}", partner))
 
 
 # ---- F1: config discovery (DAEMON_INTERFACE §1) — three regimes ----
@@ -82,6 +93,72 @@ def f3(ad, home, partner, ctx, tmp):
         return False
     schema = json.load(open(os.path.join(HERE, "_detect_schema.json")))
     return not validate(json.load(open(p)), schema)
+
+
+@check("F4", "DAEMON_INTERFACE parse-driven detect resolves mirror + per-partner file")
+def f4(ad, home, partner, ctx, tmp):
+    decl = _decl()
+    if not decl:
+        return None
+    iad = _adapter.from_interface_declaration(
+        os.path.join(ROOT, "DAEMON_INTERFACE.json"), ad.daemon
+    )
+    r = iad.run(home, "detect", "p")
+    if r.returncode != 0:
+        return False
+    detect = decl.get("detect_result", {})
+    mirror = os.path.join(home, detect.get("file", ""))
+    per_partner = _template_path(home, detect.get("per_partner_file", ""), "p")
+    if not (os.path.exists(mirror) and os.path.exists(per_partner)):
+        return False
+    schema = json.load(open(os.path.join(HERE, "_detect_schema.json")))
+    return (
+        json.load(open(mirror)).get("partner") == "p"
+        and json.load(open(per_partner)).get("partner") == "p"
+        and not validate(json.load(open(mirror)), schema)
+        and not validate(json.load(open(per_partner)), schema)
+    )
+
+
+@check("F5", "DAEMON_INTERFACE subcommands match daemon dispatch modulo extra machinery")
+def f5(ad, home, partner, ctx, tmp):
+    decl = _decl()
+    if not decl or not ad.daemon or not os.path.exists(ad.daemon):
+        return None
+    declared = set(decl.get("subcommands", {}).keys())
+    guard_argv = decl.get("guard", {}).get("cli_check", {}).get("argv", [])
+    if guard_argv:
+        declared.add(guard_argv[0])
+    src = open(ad.daemon).read()
+    dispatched = set(re.findall(r'(?:if|elif) c == "([^"]+)"', src))
+    extra_machinery = {"convergence-audit"}
+    return not (declared - dispatched) and not (dispatched - declared - extra_machinery)
+
+
+@check("F6", "DAEMON_INTERFACE declares per-partner detect/draft/inbox scratch names")
+def f6(ad, home, partner, ctx, tmp):
+    decl = _decl()
+    if not decl:
+        return None
+    detect = decl.get("detect_result", {})
+    effects = decl.get("effects", {})
+    required_templates = [
+        detect.get("per_partner_file", ""),
+        effects.get("entry_draft_per_partner", ""),
+        effects.get("inbox_per_partner", ""),
+    ]
+    if not all("{partner}" in template for template in required_templates):
+        return False
+    r = ad.run(home, "detect", "p")
+    if r.returncode != 0:
+        return False
+    expected_files = [
+        detect.get("file", ""),
+        detect.get("per_partner_file", "").replace("{partner}", "p"),
+        effects.get("entry_draft", ""),
+        effects.get("entry_draft_per_partner", "").replace("{partner}", "p"),
+    ]
+    return all(path and os.path.exists(os.path.join(home, path)) for path in expected_files)
 
 
 def collect(ad):
