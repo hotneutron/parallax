@@ -156,8 +156,9 @@
     "2": "usage / argument error (unknown command, missing arg, missing/corrupt config)"
   },
   "detect_result": {
-    "file": "_detect_{partner}.json",
-    "legacy_mirror": "_detect.json (last-run single-slot mirror; in multi-partner flows read the per-partner file, NOT this — the mirror carries only the most recent detect)",
+    "file": "_detect.json",
+    "per_partner_file": "_detect_{partner}.json",
+    "partner_substitution": "{partner} is replaced by the partner argument — the SAME token substituted in subcommands.*.argv. `file` is the single-slot last-run mirror (always mechanically resolvable, correct for a single-partner cycle); multi-partner consumers MUST resolve `per_partner_file` per partner to avoid cross-partner contamination.",
     "validating_schema": "conformance/_detect_schema.json",
     "shape": {
       "partner": "str",
@@ -171,10 +172,11 @@
   },
   "effects": {
     "manifest": "_parallax_read_log.json",
-    "entry_draft": "_sync_entry_draft_{partner}.json",
-    "detect_result": "_detect_{partner}.json",
-    "inbox": "_inbox_{partner}.json",
-    "per_partner_scratch": "detect_result / entry_draft / inbox are keyed by partner ({partner} in the name); each also writes a single-slot LEGACY mirror (_detect.json / _sync_entry_draft.json / _inbox.json) carrying only the last run \u2014 read the per-partner file in multi-partner flows to avoid cross-partner contamination",
+    "entry_draft": "_sync_entry_draft.json",
+    "entry_draft_per_partner": "_sync_entry_draft_{partner}.json",
+    "inbox": "_inbox.json",
+    "inbox_per_partner": "_inbox_{partner}.json",
+    "per_partner_note": "detect_result / entry_draft / inbox each write a per-partner file (_*_{partner}.json) AND a single-slot legacy mirror (_*.json, last run only). The base effect names here are the MIRRORS (always mechanically resolvable, no substitution); resolve the *_per_partner names in multi-partner flows. {partner} = the argv partner token (see detect_result.partner_substitution).",
     "draft_semantics": "to_review filled at detect (classified); reviewed filled at prepare (actually-read, from the manifest) \u2014 2a",
     "sync_flag": ".parallax_sync_mode",
     "relay_pointer": "_relay.json",

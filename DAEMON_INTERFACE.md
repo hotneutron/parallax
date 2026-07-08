@@ -60,9 +60,12 @@ the sanctioned-access escape hatch). One file, automatic enforcement.
 ## 4. Machine-readable detect result
 
 `detect` writes `<home>/_detect_<partner>.json` (per-partner, so concurrent
-partner cycles don't clobber each other; a single-slot `_detect.json` legacy
-mirror carries the **last run only** — read the per-partner file in multi-partner
-flows) so the suite asserts on structure, not wording:
+partner cycles don't clobber each other) **and** a single-slot `_detect.json`
+legacy mirror (the **last run only**) so the suite asserts on structure, not
+wording. In the machine-readable declaration this is `detect_result.file`
+(= the always-resolvable mirror) + `detect_result.per_partner_file`
+(= `_detect_<partner>.json`, with `{partner}` substituted exactly as in `argv`);
+multi-partner consumers resolve the per-partner file to avoid contamination:
 
 ```json
 { "partner": "...", "their_head": "...", "pinned": "...",
