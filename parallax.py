@@ -69,20 +69,40 @@ def load_tiers():
         return {**DEFAULTS, **json.load(open(p))}
     return DEFAULTS
 def parse_fm(content):
-    """Minimal frontmatter scan → (artifact_type, [parent_artifacts], addressed_to)."""
-    atype, parents, addressed_to, inp = "", [], "", False
+    """Minimal frontmatter scan → (artifact_type, [parent_artifacts], [addressed_to recipients]).
+    `addressed_to` is a recipient MEMBERSHIP set, always returned as a list. Accepted spellings:
+    a scalar (`addressed_to: team`), a comma-separated scalar (legacy, deprecation-compatible),
+    a flow sequence (`addressed_to: [a, b]`), or a YAML block sequence (`- a` lines). A doc naming
+    two recipients no longer collapses to one token — the single-token parse was the four-tier hole
+    that let a direct multi-recipient request classify as optional context."""
+    atype, parents, addressed = "", [], []
+    inp = in_addr = False
     if content and content.startswith("---\n"):
         end = content.find("\n---\n", 4)
         for line in (content[4:end] if end > 0 else "").split("\n"):
             m = re.match(r"\s*artifact_type:\s*(\w+)", line)
-            if m: atype = m.group(1)
-            am = re.match(r"\s*addressed_to:\s*(\S+)", line)
-            if am: addressed_to = am.group(1)
-            if re.match(r"\s*parent_artifacts:", line): inp = True; continue
+            if m: atype = m.group(1); continue
+            am = re.match(r"\s*addressed_to:\s*(.*)$", line)
+            if am:
+                inp = in_addr = False
+                val = am.group(1).strip()
+                if val.startswith("[") and val.endswith("]"):        # flow sequence: [a, b]
+                    addressed = [x.strip().strip("\"'") for x in val[1:-1].split(",") if x.strip()]
+                elif val:                                            # scalar or comma-separated scalar (legacy)
+                    addressed = [x.strip().strip("\"'") for x in val.split(",") if x.strip()]
+                else:                                                # empty ⇒ YAML block sequence follows
+                    in_addr = True
+                continue
+            if re.match(r"\s*parent_artifacts:", line): inp, in_addr = True, False; continue
+            item = re.match(r"\s+-\s+(.*)$", line)
+            if in_addr:
+                if item: addressed.append(item.group(1).strip().strip("\"'"))
+                elif line.strip() and not line.startswith(" "): in_addr = False
+                continue
             if inp:
-                if re.match(r"\s+-\s+", line): parents.append(line.strip()[2:].strip())
+                if item: parents.append(item.group(1).strip())
                 elif line.strip() and not line.startswith(" "): inp = False
-    return atype, parents, addressed_to
+    return atype, parents, addressed
 
 
 def _topic_tokens(rel, content, stop):
@@ -137,11 +157,11 @@ def classify(rel, content=None, t=None, active=None):
     intent; classify honors it early, ahead of artifact_type heuristics."""
     t = t or load_tiers()
     if content and rel.endswith(".md"):
-        atype, parents, addressed_to = parse_fm(content)
+        atype, parents, addressed = parse_fm(content)
         self_name = t.get("self_name", "")
-        # explicit addressed_to — reliable, works for any artifact_type
-        if self_name and addressed_to == self_name:
-            return 1, f"addressed to us — cross-team ask demanding a response"
+        # explicit addressed_to membership — reliable, works for any artifact_type and any recipient count
+        if self_name and self_name in addressed:
+            return 1, f"addressed to us ({self_name} ∈ addressed_to) — cross-team ask demanding a response"
         elif atype in t["addressed"]:
             return 1, f"{atype} — cross-team ask demanding a response"
         if atype in t["atypes"]:
