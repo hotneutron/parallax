@@ -41,6 +41,28 @@ def _detect_json(ad, home):
     return json.load(open(p)) if os.path.exists(p) else None
 
 
+def _commit_partner_doc(partner, rel, body):
+    path = os.path.join(partner, rel)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    open(path, "w").write(body)
+    subprocess.run(["git", "-C", partner, "add", rel], check=True)
+    subprocess.run(["git", "-C", partner, "commit", "-qm", f"fixture: {rel}"], check=True)
+
+
+def _set_self_name(home, name):
+    path = os.path.join(home, "tiers.json")
+    tiers = json.load(open(path))
+    tiers["self_name"] = name
+    json.dump(tiers, open(path, "w"))
+
+
+def _tier_for(ad, home, rel):
+    detected = _detect_json(ad, home)
+    if detected is None:
+        return None
+    return next((tier for tier, paths in detected["tiers"].items() if rel in paths), None)
+
+
 def _add_second_partner(home, partner):
     """Add a second synthetic partner with a distinct HEAD so prepare output can
     prove it used the requested partner's draft, not the last detect mirror."""
@@ -359,6 +381,97 @@ def b18(ad, home, partner, ctx):
     ad.run(home, "detect", "p")
     dj = _detect_json(ad, home)
     return dj is not None and any("0002-reaction.md" in p for p in dj["tiers"].get("1", []))
+
+
+# ---- rung 0: multi-recipient addressed_to membership ----
+@check("B27", "rung0", "scalar-addressed brainstorm is T1 only for its named consumer")
+def b27(ad, home, partner, ctx):
+    rel = "docs/addr-scalar-brainstorm.md"
+    _commit_partner_doc(partner, rel,
+                        "---\nartifact_type: brainstorm\naddressed_to: consumer-repo\n---\n# scalar\n")
+    _set_self_name(home, "consumer-repo")
+    ad.run(home, "detect", "p")
+    ours = _tier_for(ad, home, rel) == "1"
+    _set_self_name(home, "other-consumer")
+    ad.run(home, "detect", "p")
+    other = _tier_for(ad, home, rel) == "3"
+    _set_self_name(home, "consumer-repo")
+    return ours and other
+
+
+@check("B28", "rung0", "YAML block-sequence recipients make a brainstorm T1 for each named consumer")
+def b28(ad, home, partner, ctx):
+    rel = "docs/addr-block-recipients.md"
+    _commit_partner_doc(partner, rel,
+                        "---\nartifact_type: brainstorm\naddressed_to:\n  - consumer-repo\n  - second-consumer\n---\n# block\n")
+    _set_self_name(home, "consumer-repo")
+    ad.run(home, "detect", "p")
+    first = _tier_for(ad, home, rel) == "1"
+    _set_self_name(home, "second-consumer")
+    ad.run(home, "detect", "p")
+    second = _tier_for(ad, home, rel) == "1"
+    _set_self_name(home, "consumer-repo")
+    return first and second
+
+
+@check("B29", "rung0", "legacy comma-separated recipients make a brainstorm T1 for each named consumer")
+def b29(ad, home, partner, ctx):
+    rel = "docs/addr-comma-recipients.md"
+    _commit_partner_doc(partner, rel,
+                        "---\nartifact_type: brainstorm\naddressed_to: consumer-repo, second-consumer\n---\n# comma\n")
+    _set_self_name(home, "consumer-repo")
+    ad.run(home, "detect", "p")
+    first = _tier_for(ad, home, rel) == "1"
+    _set_self_name(home, "second-consumer")
+    ad.run(home, "detect", "p")
+    second = _tier_for(ad, home, rel) == "1"
+    _set_self_name(home, "consumer-repo")
+    return first and second
+
+
+@check("B30", "rung0", "a body heading alone does not promote a brainstorm to T1")
+def b30(ad, home, partner, ctx):
+    rel = "docs/addr-body-only.md"
+    _commit_partner_doc(partner, rel,
+                        "---\nartifact_type: brainstorm\n---\n# Request To consumer-repo\n")
+    _set_self_name(home, "consumer-repo")
+    ad.run(home, "detect", "p")
+    return _tier_for(ad, home, rel) == "3"
+
+
+@check("B31", "rung0", "a multi-recipient brainstorm omitting us stays at its default tier")
+def b31(ad, home, partner, ctx):
+    rel = "docs/addr-other-recipients.md"
+    _commit_partner_doc(partner, rel,
+                        "---\nartifact_type: brainstorm\naddressed_to: [second-consumer, third-consumer]\n---\n# others\n")
+    _set_self_name(home, "consumer-repo")
+    ad.run(home, "detect", "p")
+    return _tier_for(ad, home, rel) == "3"
+
+
+@check("B32", "rung0", "existing scalar addressed_to spelling remains T1 for a brainstorm")
+def b32(ad, home, partner, ctx):
+    rel = "docs/addr-existing-scalar.md"
+    _commit_partner_doc(partner, rel,
+                        "---\nartifact_type: brainstorm\naddressed_to: consumer-repo\n---\n# existing scalar\n")
+    _set_self_name(home, "consumer-repo")
+    ad.run(home, "detect", "p")
+    return _tier_for(ad, home, rel) == "1"
+
+
+@check("B33", "rung0", "YAML flow-sequence recipients make a brainstorm T1 for each named consumer")
+def b33(ad, home, partner, ctx):
+    rel = "docs/addr-flow-recipients.md"
+    _commit_partner_doc(partner, rel,
+                        "---\nartifact_type: brainstorm\naddressed_to: [consumer-repo, second-consumer]\n---\n# flow\n")
+    _set_self_name(home, "consumer-repo")
+    ad.run(home, "detect", "p")
+    first = _tier_for(ad, home, rel) == "1"
+    _set_self_name(home, "second-consumer")
+    ad.run(home, "detect", "p")
+    second = _tier_for(ad, home, rel) == "1"
+    _set_self_name(home, "consumer-repo")
+    return first and second
 
 # ---- edge cases / crash-resistance continuation ----
 def b11(ad, home, partner, ctx):
