@@ -280,6 +280,34 @@ def b21(ad, home, partner, ctx):
     return has_new and not has_old and read_new
 
 
+@check("B34", "classify", "configured doc_dirs classify non-docs markdown via detect gate and fallback")
+def b34(ad, home, partner, ctx):
+    # Regression for PR #8: both detect's is_doc gate and classify's `.md`
+    # fallback must use config, not a hardcoded docs/ prefix. The reaction proves
+    # the detect gate lets papers/ docs reach frontmatter classification; the
+    # untyped note proves classify's unresolved-doc fallback also honors doc_dirs.
+    tiers_path = os.path.join(home, "tiers.json")
+    tiers = json.load(open(tiers_path))
+    tiers["doc_dirs"] = ["docs/", "papers/"]
+    tiers["trigger_prefixes"] = ["docs/", "schemas/", "papers/"]
+    tiers["triggers"] = ["docs/", "schemas/", "papers/"]
+    json.dump(tiers, open(tiers_path, "w"))
+    reaction = "papers/9001-reaction.md"
+    note = "papers/9002-note.md"
+    _commit_partner_doc(partner, reaction,
+                        "---\nartifact_type: reaction\naddressed_to: consumer-repo\n---\n# paper reaction\n")
+    _commit_partner_doc(partner, note, "# untyped paper note\n")
+    ad.run(home, "detect", "p")
+    dj = _detect_json(ad, home)
+    if dj is None:
+        return False
+    unclassified = set(dj.get("unclassified", []))
+    return (_tier_for(ad, home, reaction) == "1"
+            and _tier_for(ad, home, note) == "3"
+            and reaction not in unclassified
+            and note not in unclassified)
+
+
 @check("B22", "detect", "an UNREACHABLE last_pinned is flagged + surfaces commits, never silent 'no new commits'")
 def b22(ad, home, partner, ctx):
     # Bug #2: a pin that isn't a real commit (rebase/history-rewrite artifact) makes `git log <pin>..HEAD`

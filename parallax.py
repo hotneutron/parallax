@@ -53,6 +53,7 @@ DEFAULTS = {
                  "PROTOCOL.md","PROTOCOL_INVARIANTS.json","VERSIONS.md",
                  "schemas/","daemon/","spec-tests/","README.md"],
     "contracts": ["schemas/","PROTOCOL.md","PROTOCOL_INVARIANTS.json","VERSIONS.md"],
+    "doc_dirs": ["docs/"],                # a partner's .md docs live here; consumer-configurable, NOT hardcoded
     # Topic-alignment promotion (opt-in; None = off, so the default is unchanged). Promotes a partner
     # `brainstorm` from its default tier to T2 when it shares ≥`min_overlap` SUBSTANTIVE topic tokens
     # with one of the READER's own recent (≤`days`) `plan` docs — i.e. the partner brainstorm
@@ -178,7 +179,7 @@ def classify(rel, content=None, t=None, active=None):
     for p in t["contracts"]:
         if rel == p or rel.startswith(p): return 2, "shared contract/schema changed — validate + converge"
     if rel.endswith("sync_ledger.json"): return 2, "partner ledger pin"
-    if rel.endswith(".md") and rel.startswith("docs/"): return 3, "doc, type unresolved — manual reclass"
+    if rel.endswith(".md") and any(rel.startswith(d) for d in t["doc_dirs"]): return 3, "doc, type unresolved — manual reclass"
     return 3, "triggered, unclassified"
 
 def jload(p):
@@ -319,7 +320,7 @@ def cmd_detect(name):
             continue
         for f in changed:
             if f in seen: continue
-            is_doc = f.endswith(".md") and f.startswith("docs/")
+            is_doc = f.endswith(".md") and any(f.startswith(d) for d in t["doc_dirs"])
             is_contract = any(f == p or f.startswith(p) for p in contracts) or f.endswith("sync_ledger.json")
             if not (is_doc or is_contract):
                 # not silently dropped: a triggered file we can't classify (interface
