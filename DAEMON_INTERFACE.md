@@ -28,9 +28,11 @@ a Git worktree; runtime state is resolved with:
 git -C <consumer-root> rev-parse --git-path cross-team/parallax
 ```
 
-This Git-private directory holds all daemon emissions, read logs, ledgers, and
+This Git-private directory holds daemon emissions, read logs, and
 `partner_cursors.json`. A cursor contains `{last_pinned,last_sync}` per
-partner. The daemon never writes cursors back to `cross-team.json`.
+partner. The daemon never writes cursors back to `cross-team.json`. A consumer
+may set `parallax.ledger_path` to a committed ledger path; relative paths are
+resolved from `cross-team.json`, while an omitted field keeps the runtime ledger.
 
 Without `CROSS_TEAM_CONFIG`, the legacy sync home holds `partners.json`, the
 ledger, `embargo_registry.json`, and `tiers.json`. It is resolved as:
@@ -48,7 +50,7 @@ root = `git -C <home> rev-parse --show-toplevel`.
 | `prepare <partner> [--advance]` / `prepare --all [--advance]` | draft a ledger entry + a one-per-cycle reaction stub; `--advance` fills `reviewed` from the manifest and advances the pin; under `CROSS_TEAM_CONFIG` the cursor is written to Git-private state, never static config; `--all` (or `prepare all`) drafts **one combined stub across every partner** with a current per-partner draft — the interleaved multi-partner `detect A; detect B → one reaction` cadence (with `--advance`, advances every drafted partner's pin) |
 | `relay <partner> <path…>` | emit a relay pointer for committed-clean paths |
 | `count <partner>` | partner-ahead count (a numeric ahead-count, never subjects) |
-| `ledger [--recent N] [--partner P]` | read-only compact summary of the ledger's last `N` entries; no state mutation, no pin advance, no schema change (reads `sync_ledger.json` as-is, schema-tolerant across the teams' divergent ledgers) |
+| `ledger [--recent N] [--partner P]` | read-only compact summary of the ledger's last `N` entries; no state mutation, no pin advance, no schema change (reads configured `parallax.ledger_path`, or the runtime `sync_ledger.json` when omitted; schema-tolerant across the teams' divergent ledgers) |
 | `guard <path>` | CLI check: is `<path>` inside a partner repo? (0 = no, 1 = yes) |
 | `watch <partner> [--poll <secs>]` | block on the partner's reflog until HEAD passes the pin, then `detect` (+ `prepare` on obligation), write `_inbox_<partner>.json`, exit 0 — **never commits/relays** (rung 1) |
 | `index-diff <partner>` | diff the partner's committed `claims_index.json` against the last-pinned copy → `{added, removed, changed}` claim ids for targeted reads; partner reads append to the read-log (I8) (rung 2) |

@@ -409,6 +409,63 @@ def b36(ad, home, partner, ctx):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@check("B37", "config", "CROSS_TEAM_CONFIG resolves parallax.ledger_path outside Git-private runtime state")
+def b37(ad, home, partner, ctx):
+    tmp = tempfile.mkdtemp()
+    try:
+        h, _p, fixture = _fixture.build(tmp)
+        partners = json.load(open(os.path.join(h, "partners.json")))["partners"]
+        for partner_cfg in partners.values():
+            partner_cfg.pop("last_pinned", None)
+            partner_cfg.pop("last_sync", None)
+        tiers = {
+            "self_name": "consumer-repo",
+            "addressed": ["reaction", "cross_check", "proposal"],
+            "addressed_to_us": [],
+            "atypes": {"findings": 2, "plan": 2, "brainstorm": 3, "reflection": 4},
+            "triggers": ["docs/", "schemas/", "sync_ledger.json"],
+            "contracts": ["schemas/"],
+            "doc_dirs": ["docs/"],
+            "promote_brainstorm": None,
+        }
+        ledger_rel = "methodology/sync_ledger.json"
+        ledger_path = os.path.join(h, ledger_rel)
+        os.makedirs(os.path.dirname(ledger_path), exist_ok=True)
+        json.dump({"partner": "p", "entries": [{
+            "date": "2026-01-02",
+            "partner": "p",
+            "their_head": fixture["base"],
+            "obligations": ["committed-ledger-standing-obligation"],
+        }]}, open(ledger_path, "w"))
+        config_path = os.path.join(h, "cross-team.json")
+        json.dump({"version": "1.0", "parallax": {
+            "partners": partners,
+            "tiers": tiers,
+            "ledger_path": ledger_rel,
+        }}, open(config_path, "w"), indent=2)
+        before = open(config_path, "rb").read()
+        os.remove(os.path.join(h, "partners.json"))
+        os.remove(os.path.join(h, "tiers.json"))
+        detected = _cross_config_run(ad, h, config_path, "detect", "p")
+        prepared = _cross_config_run(ad, h, config_path, "prepare", "p")
+        ledger = _cross_config_run(ad, h, config_path, "ledger", "--recent", "1")
+        if any(result.returncode != 0 for result in (detected, prepared, ledger)):
+            return False
+        try:
+            summary = json.loads(ledger.stdout)
+        except json.JSONDecodeError:
+            return False
+        return (
+            "committed-ledger-standing-obligation" in prepared.stdout
+            and summary.get("total_entries") == 1
+            and summary.get("entries", [{}])[0].get("head") == fixture["base"]
+            and open(config_path, "rb").read() == before
+            and not os.path.exists(os.path.join(_private_state_path(h), "sync_ledger.json"))
+        )
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 @check("B22", "detect", "an UNREACHABLE last_pinned is flagged + surfaces commits, never silent 'no new commits'")
 def b22(ad, home, partner, ctx):
     # Bug #2: a pin that isn't a real commit (rebase/history-rewrite artifact) makes `git log <pin>..HEAD`

@@ -106,6 +106,7 @@ see their rows.**
 | B12c ★ | rung1 | `watch` (INOTIFY fast-path) catches a fresh commit — where `inotifywait` exists | soft | gated on `inotifywait`: **BLOCKED** on macOS/Windows (B12b covers them), PASS on Linux |
 | B35 ★ | config | `CROSS_TEAM_CONFIG` drives partners + tiers without split config or consumer worktree state | hard | detect writes under `git rev-parse --git-path cross-team/parallax`; static config remains byte-identical |
 | B36 ★ | config | `CROSS_TEAM_CONFIG` pin advance writes only Git-private cursor state | hard | detect/read/prepare `--advance` leaves config unchanged and writes `{last_pinned,last_sync}` to `partner_cursors.json` |
+| B37 ★ | config | `CROSS_TEAM_CONFIG` resolves `parallax.ledger_path` as a consumer-owned ledger | hard | `prepare` reads standing obligations and `ledger` summarizes a configured relative ledger; no private `sync_ledger.json` is created |
 
 ### Layer E — robustness (black-box, no traceback on bad input)
 

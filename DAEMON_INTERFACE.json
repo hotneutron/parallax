@@ -1,12 +1,12 @@
 {
   "title": "parallax unified daemon \u2014 machine-readable invocation declaration",
   "protocol": "parallax",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "daemon": "parallax.py",
   "_doc": "The PARSEABLE invocation declaration: a consumer's adapter-builder reads THIS to invoke the daemon deterministically \u2014 no prose-reading, no --help parsing, no behavioural probing, no model tokens spent inferring conventions. The canonical schema for this declaration; supersedes the prose-shaped seed. Not a JSON-Schema (it validates nothing) \u2014 it is a declaration; the one DATA artifact (detect_result) names its own validating schema.",
   "config_discovery": {
     "env_var": "CROSS_TEAM_CONFIG",
-    "when_set": "read static partners + tiers from the consumer config; resolve daemon emissions and partner_cursors.json through `git -C <config-dir> rev-parse --git-path cross-team/parallax`; never mutate the consumer config",
+    "when_set": "read static partners, tiers, and optional parallax.ledger_path from the consumer config; resolve daemon emissions and partner_cursors.json through `git -C <config-dir> rev-parse --git-path cross-team/parallax`; a relative ledger_path resolves from the config directory; never mutate the consumer config",
     "legacy_env_var": "PARALLAX_HOME",
     "fallbacks": [
       "nearest cwd-ancestor containing partners.json",
@@ -93,7 +93,7 @@
       "exit": {
         "0": "success"
       },
-      "emits": "read-only JSON summary of the last N ledger entries {total_entries, shown, entries:[{date,partner,head,msg,reviewed,obligations}]}; no mutation, no pin advance, no schema change"
+      "emits": "read-only JSON summary of the last N ledger entries {total_entries, shown, entries:[{date,partner,head,msg,reviewed,obligations}]}; reads parallax.ledger_path when configured, otherwise the runtime ledger; no mutation, no pin advance, no schema change"
     },
     "watch": {
       "argv": [

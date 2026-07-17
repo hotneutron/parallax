@@ -52,9 +52,11 @@ worktree. Runtime state is resolved with:
 git -C <consumer-root> rev-parse --git-path cross-team/parallax
 ```
 
-That Git-private directory holds daemon emissions, read logs, ledgers, and
+That Git-private directory holds daemon emissions, read logs, and
 `partner_cursors.json`; a cursor stores each partner's `last_pinned` and
-`last_sync`. Syncing never modifies `cross-team.json`.
+`last_sync`. Set optional `parallax.ledger_path` for a consumer-owned ledger;
+a relative path resolves from `cross-team.json`. Without that field, the ledger
+remains runtime state. Syncing never modifies `cross-team.json`.
 
 Without `CROSS_TEAM_CONFIG`, the legacy mode finds its config via
 `PARALLAX_HOME`, else the nearest cwd-ancestor with a `partners.json` (so the

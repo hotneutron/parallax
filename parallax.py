@@ -27,6 +27,15 @@ def config_root():
     p = cross_team_config_path()
     return p.parent if p else Path(home())
 
+def ledger_path():
+    """Return the configured committed ledger path, or the legacy runtime path."""
+    pc = parallax_config()
+    raw = pc.get("ledger_path") if pc is not None else None
+    if raw:
+        path = Path(raw).expanduser()
+        return str(path if path.is_absolute() else config_root() / path)
+    return hp("sync_ledger.json")
+
 def _private_state_home():
     """Return the consumer's worktree-safe private Parallax state directory."""
     config = cross_team_config_path()
@@ -494,7 +503,7 @@ def cmd_prepare(name, advance=False):
     if d.get("partner") and d["partner"] != name:  # never emit another partner's stub (the contamination guard)
         print(f"ERROR: draft {os.path.basename(dpath)} is for {d['partner']}, not {name}"); sys.exit(2)
     standing = []
-    ledger = jload(hp("sync_ledger.json"))
+    ledger = jload(ledger_path())
     if ledger.get("entries"): standing = ledger["entries"][-1].get("obligations",[])
     if advance:
         partners = partners_doc()
@@ -534,7 +543,7 @@ def cmd_prepare_all(advance=False):
         print("Pins advanced: " + ", ".join(f"{n}→{d.get('their_head','?')[:7]}" for n, d in drafts))
         return
     standing = []
-    ledger = jload(hp("sync_ledger.json"))
+    ledger = jload(ledger_path())
     if ledger.get("entries"): standing = ledger["entries"][-1].get("obligations", [])
     print(f"# Reaction — opus combined sync ({len(drafts)} partners: {', '.join(n for n, _ in drafts)})\n")
     for n, d in drafts:
@@ -555,7 +564,7 @@ def cmd_ledger(recent=1, partner_filter=None):
     `recent` entries. Read-only — no state mutation, no pin advance, no schema change (reads the
     ledger as-is). Schema-tolerant: the two teams' ledgers diverge (machinery), so every field is
     resolved with .get() fallbacks and obligation shapes (dict / list) are counted generically."""
-    led = jload(hp("sync_ledger.json"))
+    led = jload(ledger_path())
     entries = led.get("entries", [])
     top_partner = led.get("partner")
     total = len(entries)
