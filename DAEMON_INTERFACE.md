@@ -20,8 +20,20 @@ conformance suite needs to drive either daemon.*
 
 ## 1. Config discovery
 
-The daemon reads `partners.json` / the ledger / `embargo_registry.json` /
-`tiers.json` from the **sync home**, resolved as:
+When `CROSS_TEAM_CONFIG` is set, the daemon reads static partner descriptors
+and tier configuration from that consumer-owned file. The consumer must be in
+a Git worktree; runtime state is resolved with:
+
+```sh
+git -C <consumer-root> rev-parse --git-path cross-team/parallax
+```
+
+This Git-private directory holds all daemon emissions, read logs, ledgers, and
+`partner_cursors.json`. A cursor contains `{last_pinned,last_sync}` per
+partner. The daemon never writes cursors back to `cross-team.json`.
+
+Without `CROSS_TEAM_CONFIG`, the legacy sync home holds `partners.json`, the
+ledger, `embargo_registry.json`, and `tiers.json`. It is resolved as:
 `$PARALLAX_HOME` if set, **else the nearest ancestor of `cwd` containing
 `partners.json`**, else the script directory. (Not script-relative *first* —
 that breaks when the daemon is installed apart from its config.) Consumer repo
@@ -33,7 +45,7 @@ root = `git -C <home> rev-parse --show-toplevel`.
 |---|---|
 | `detect <partner>` | list new partner commits, classify, write the result file (§4) |
 | `read <partner> <path>` | read `partner@HEAD:path` into quarantine + manifest |
-| `prepare <partner> [--advance]` / `prepare --all [--advance]` | draft a ledger entry + a one-per-cycle reaction stub; `--advance` fills `reviewed` from the manifest and advances the pin; `--all` (or `prepare all`) drafts **one combined stub across every partner** with a current per-partner draft — the interleaved multi-partner `detect A; detect B → one reaction` cadence (with `--advance`, advances every drafted partner's pin) |
+| `prepare <partner> [--advance]` / `prepare --all [--advance]` | draft a ledger entry + a one-per-cycle reaction stub; `--advance` fills `reviewed` from the manifest and advances the pin; under `CROSS_TEAM_CONFIG` the cursor is written to Git-private state, never static config; `--all` (or `prepare all`) drafts **one combined stub across every partner** with a current per-partner draft — the interleaved multi-partner `detect A; detect B → one reaction` cadence (with `--advance`, advances every drafted partner's pin) |
 | `relay <partner> <path…>` | emit a relay pointer for committed-clean paths |
 | `count <partner>` | partner-ahead count (a numeric ahead-count, never subjects) |
 | `ledger [--recent N] [--partner P]` | read-only compact summary of the ledger's last `N` entries; no state mutation, no pin advance, no schema change (reads `sync_ledger.json` as-is, schema-tolerant across the teams' divergent ledgers) |

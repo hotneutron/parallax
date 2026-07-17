@@ -11,7 +11,7 @@ S3  a synthetic registry carrying FOREIGN machinery extras (a per-partner beacon
     the interop-minimum / permissive-extras invariant (260613-1522). This is the
     code path the cross-run's bidirectional S2 exercises; tested here on a fixture
     so it runs without a partner.
-S2  bidirectional cross-validate (op-schema ⊨ partner-data AND vice-versa) —
+S2  bidirectional cross-validate (team-b-schema ⊨ partner-data AND vice-versa) —
     activates at the CROSS-run (needs the partner's live data); reported N/A in
     self mode (the S3 fixture proves the mechanism).
 
@@ -65,14 +65,14 @@ def collect(home=None):
                 + (f"  [{errs[0]}]" if errs else ""), True, not errs))
     # S5 — claims_index convergence_tag constraint: independent ⟹ measurement-based
     cschema = json.load(open(os.path.join(SCHEMAS, "claims_index.schema.json")))
-    _good = {"entries": [{"id": "op:F-X-1", "statement": "s", "evidence_ref": "260101-0000",
+    _good = {"entries": [{"id": "teamb:F-X-1", "statement": "s", "evidence_ref": "260101-0000",
                           "evidence_tier": "measured", "convergence_tag": "independent", "status": "corroborated"}]}
-    _bad = {"entries": [{"id": "op:F-Y-1", "statement": "s",
+    _bad = {"entries": [{"id": "teamb:F-Y-1", "statement": "s",
                          "evidence_tier": "conjectural", "convergence_tag": "independent", "status": "open"}]}
     out.append(("S5", "schema", "claims_index: independent ⟹ measured/inferred (valid passes; conjectural+independent rejected)",
                 True, (not validate(_good, cschema)) and bool(validate(_bad, cschema))))
     # S6 — divergences is team-agnostic: arbitrary team names (from partners.json) validate;
-    # the schema fixes NO team names. Fails on the pre-genericization schema (required:[ds4m,op]).
+    # the schema fixes NO team names. Fails on the pre-genericization schema (required:[team-a,team-b]).
     dschema = json.load(open(os.path.join(SCHEMAS, "divergences.schema.json")))
     _gen = {"entries": [{"claim": "c:X-1", "sides": {"alice": "A", "bob": "B"}, "crux": "measure it",
                          "status": "resolved:alice", "resolution_measurement": "ran the bench",

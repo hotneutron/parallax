@@ -79,13 +79,13 @@ def build(tmp):
          "evidence_ref": "docs/0001.md", "status": "open", "last_updated": "2026-01-01"}
     ]}))
     _w(partner, "divergences.recent.json", json.dumps({"file": "recent", "entries": [
-        {"claim": "c:F-1", "sides": {"ds4m": "A", "op": "B"}, "crux": "measure it",
+        {"claim": "c:F-1", "sides": {"team-a": "A", "team-b": "B"}, "crux": "measure it",
          "status": "open", "last_updated": "2026-01-01"}
     ]}))
     _w(partner, "divergences.archived.resolved.json", json.dumps({"file": "archived.resolved", "entries": [
-        {"claim": "c:F-OLD", "sides": {"ds4m": "X", "op": "Y"}, "crux": "old",
-         "resolution_measurement": "ran it", "status": "resolved:ds4m", "last_updated": "2020-01-01"},
-        {"claim": "c:F-SHARED", "sides": {"ds4m": "shared-pos", "op": "shared-pos"},
+        {"claim": "c:F-OLD", "sides": {"team-a": "X", "team-b": "Y"}, "crux": "old",
+         "resolution_measurement": "ran it", "status": "resolved:team-a", "last_updated": "2020-01-01"},
+        {"claim": "c:F-SHARED", "sides": {"team-a": "shared-pos", "team-b": "shared-pos"},
          "crux": "aging test", "status": "open", "last_updated": "2026-01-01"}
     ]}))
     _commit(partner, "feat: claims_index + divergences (rung 2+3 fixture)")

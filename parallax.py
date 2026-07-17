@@ -8,9 +8,48 @@ import json, os, re, shutil, subprocess, sys, time
 from datetime import date
 from pathlib import Path
 
+_CROSS_TEAM_CONFIG = None
+
+def cross_team_config_path():
+    p = os.environ.get("CROSS_TEAM_CONFIG")
+    return Path(p).expanduser().resolve() if p else None
+
+def cross_team_config():
+    global _CROSS_TEAM_CONFIG
+    p = cross_team_config_path()
+    if not p:
+        return None
+    if _CROSS_TEAM_CONFIG is None:
+        _CROSS_TEAM_CONFIG = json.load(open(p))
+    return _CROSS_TEAM_CONFIG
+
+def config_root():
+    p = cross_team_config_path()
+    return p.parent if p else Path(home())
+
+def _private_state_home():
+    """Return the consumer's worktree-safe private Parallax state directory."""
+    config = cross_team_config_path()
+    root = config.parent
+    r = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--git-path", "cross-team/parallax"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0 or not r.stdout.strip():
+        print("ERROR: CROSS_TEAM_CONFIG must be inside a Git worktree "
+              "(cannot create private Parallax runtime state)", file=sys.stderr)
+        sys.exit(2)
+    state = Path(r.stdout.strip())
+    if not state.is_absolute():
+        state = root / state
+    state.mkdir(parents=True, exist_ok=True)
+    return state
+
 def home():
-    """DAEMON_INTERFACE §1: PARALLAX_HOME, else nearest cwd-ancestor with
-    partners.json, else this script's directory (graceful installed fallback)."""
+    """DAEMON_INTERFACE §1: CROSS_TEAM_CONFIG, else PARALLAX_HOME, else nearest
+    cwd-ancestor with partners.json, else this script's directory."""
+    if cross_team_config_path():
+        return str(_private_state_home())
     if os.environ.get("PARALLAX_HOME"):
         return os.environ["PARALLAX_HOME"]
     d = os.getcwd()
@@ -29,9 +68,10 @@ def repo_root():
     divergences.*.json) live, since the partner reads them via `git show HEAD:<file>`. The sync
     home may be a SUBDIRECTORY (e.g. methodology/cross_team/), so these resolve against the repo
     root, not home() — the same resolution the relay gate uses (B6c bug class)."""
-    r = subprocess.run(["git", "-C", home(), "rev-parse", "--show-toplevel"],
+    base = str(config_root()) if cross_team_config_path() else home()
+    r = subprocess.run(["git", "-C", base, "rev-parse", "--show-toplevel"],
                        capture_output=True, text=True).stdout.strip()
-    return r or home()
+    return r or base
 
 def rp(rel): return os.path.join(repo_root(), rel)
 
@@ -65,6 +105,9 @@ DEFAULTS = {
 }
 
 def load_tiers():
+    pc = parallax_config()
+    if pc is not None:
+        return pc.get("tiers", {})
     p = hp("tiers.json")
     if os.path.exists(p):
         return {**DEFAULTS, **json.load(open(p))}
@@ -191,6 +234,50 @@ def jload(p):
 
 def jsave(p, d): json.dump(d, open(p, "w"), indent=2)
 
+def parallax_config():
+    ct = cross_team_config()
+    return ct.get("parallax", {}) if ct else None
+
+_CURSOR_FIELDS = ("last_pinned", "last_sync")
+
+def cursor_state():
+    d = jload(hp("partner_cursors.json"))
+    partners = d.get("partners", {})
+    return {"version": 1, "partners": partners if isinstance(partners, dict) else {}}
+
+def partners_doc():
+    pc = parallax_config()
+    if pc is not None:
+        cursors = cursor_state()["partners"]
+        partners = {}
+        for name, static in pc.get("partners", {}).items():
+            merged = dict(static)
+            cursor = cursors.get(name, {})
+            if isinstance(cursor, dict):
+                for field in _CURSOR_FIELDS:
+                    if field in cursor:
+                        merged[field] = cursor[field]
+            partners[name] = merged
+        return {"partners": partners}
+    return jload(hp("partners.json"))
+
+def save_partners_doc(doc):
+    pc = parallax_config()
+    if pc is not None:
+        state = cursor_state()
+        static_names = pc.get("partners", {})
+        for name, partner_cfg in doc.get("partners", {}).items():
+            if name not in static_names:
+                continue
+            state["partners"][name] = {
+                field: partner_cfg.get(field)
+                for field in _CURSOR_FIELDS
+                if field in partner_cfg
+            }
+        jsave(hp("partner_cursors.json"), state)
+    else:
+        jsave(hp("partners.json"), doc)
+
 def git(cmd, repo=None):
     args = ["git"]
     if repo: args += ["-C", str(repo)]
@@ -238,12 +325,13 @@ def redact(subject, emb):
 
 # ── Partner helpers ──
 def partner(name):
-    partners = jload(hp("partners.json")).get("partners",{})
+    partners = partners_doc().get("partners",{})
     if name not in partners:
         return None, None
     p = partners[name]
     rp = Path(p.get("path",""))
-    if not rp.is_absolute(): rp = (Path(home()) / rp).resolve()
+    base = config_root() if cross_team_config_path() else Path(home())
+    if not rp.is_absolute(): rp = (base / rp).resolve()
     return p, rp
 
 def phead(repo):
@@ -269,17 +357,17 @@ def default_partner():
     """The partner to act on when none is named on the command line: the sole
     configured partner, read from partners.json. Never assume a specific repo —
     if there are zero or several partners, require the caller to name one."""
-    names = list(jload(hp("partners.json")).get("partners", {}).keys())
+    names = list(partners_doc().get("partners", {}).keys())
     if len(names) == 1:
         return names[0]
-    print(f"ERROR: name a partner (partners.json lists {len(names)}: "
+    print(f"ERROR: name a partner (configured partners: {len(names)}: "
           f"{', '.join(names) or 'none'})"); sys.exit(2)
 
 # ── detect ──
 def cmd_detect(name):
     cfg, repo = partner(name)
     if cfg is None:
-        print(f"ERROR: partner '{name}' not in partners.json"); sys.exit(1)
+        print(f"ERROR: partner '{name}' not configured"); sys.exit(1)
     if not repo.is_dir():
         print(f"ERROR: partner '{name}' repo not found"); sys.exit(1)
     head = phead(repo)
@@ -409,11 +497,11 @@ def cmd_prepare(name, advance=False):
     ledger = jload(hp("sync_ledger.json"))
     if ledger.get("entries"): standing = ledger["entries"][-1].get("obligations",[])
     if advance:
-        partners = jload(hp("partners.json"))
+        partners = partners_doc()
         if name in partners.get("partners",{}):
             partners["partners"][name]["last_pinned"] = d["their_head"]
             partners["partners"][name]["last_sync"] = date.today().isoformat()
-            jsave(hp("partners.json"), partners)
+            save_partners_doc(partners)
             print(f"Pin advanced: {name} → {d['their_head'][:7]}")
             return
     h = d.get("their_head","?")[:7]
@@ -432,17 +520,17 @@ def cmd_prepare_all(advance=False):
     """Combined prepare across every partner with a current per-partner draft — the interleaved
     `detect A; detect B → read → ONE combined A+B reaction → one commit` cadence. Scans the per-partner
     scratch files (no keyed schema needed); each partner gets its own section in one stub."""
-    names = list(jload(hp("partners.json")).get("partners", {}).keys())
+    names = list(partners_doc().get("partners", {}).keys())
     drafts = [(n, jload(_draft_path(n))) for n in names if os.path.exists(_draft_path(n))]
     if not drafts:
         print("ERROR: no per-partner detect drafts — run `detect <partner>` first"); sys.exit(2)
     if advance:
-        pj = jload(hp("partners.json"))
+        pj = partners_doc()
         for n, d in drafts:
             if n in pj.get("partners", {}) and d.get("their_head"):
                 pj["partners"][n]["last_pinned"] = d["their_head"]
                 pj["partners"][n]["last_sync"] = date.today().isoformat()
-        jsave(hp("partners.json"), pj)
+        save_partners_doc(pj)
         print("Pins advanced: " + ", ".join(f"{n}→{d.get('their_head','?')[:7]}" for n, d in drafts))
         return
     standing = []
@@ -487,7 +575,7 @@ def cmd_ledger(recent=1, partner_filter=None):
             "reviewed": _n(e.get("reviewed")),
             "obligations": _n(e.get("obligations")),
         }
-        if "obligations_done" in e:  # ds4m schema carries a done/open split; op's does not
+        if "obligations_done" in e:  # team-a schema carries a done/open split; team-b's does not
             row["obligations_done"] = _n(e.get("obligations_done"))
         rows.append(row)
     print(json.dumps({"total_entries": total, "shown": len(rows), "entries": rows}, indent=2))
@@ -500,8 +588,7 @@ def cmd_relay(paths=None):
     # cwd silently matches nothing → falsely passes the commit-before-relay gate. Resolve
     # the toplevel so the pathspec aligns. (home() not in a repo → root falls back to
     # home(), preserving the prior non-git behavior.)
-    root = subprocess.run(["git","-C",home(),"rev-parse","--show-toplevel"],
-                          capture_output=True, text=True).stdout.strip() or home()
+    root = repo_root()
     args = ["git","-C",root,"status","--porcelain"]
     if paths: args += ["--"] + list(paths)
     r = subprocess.run(args, capture_output=True, text=True)
@@ -520,7 +607,7 @@ def cmd_relay(paths=None):
 def cmd_count(name):
     cfg, repo = partner(name)
     if cfg is None:
-        print(f"ERROR: partner '{name}' not in partners.json"); sys.exit(1)
+        print(f"ERROR: partner '{name}' not configured"); sys.exit(1)
     if not repo.is_dir():
         print(f"ERROR: partner '{name}' repo not found"); sys.exit(1)
     head = phead(repo)
@@ -538,9 +625,10 @@ def cmd_count(name):
 # ── guard ──
 def cmd_guard(target):
     target = Path(target).resolve()
-    for n, p in jload(hp("partners.json")).get("partners",{}).items():
+    for n, p in partners_doc().get("partners",{}).items():
         rp = Path(p.get("path",""))
-        if not rp.is_absolute(): rp = (Path(home()) / rp).resolve()
+        base = config_root() if cross_team_config_path() else Path(home())
+        if not rp.is_absolute(): rp = (base / rp).resolve()
         try:
             target.relative_to(rp)
             print(f"BLOCKED — {target} is inside partner '{n}'")
@@ -564,7 +652,7 @@ def cmd_read_guard():
     hay = " ".join(str(ti.get(k,"")) for k in ("command","file_path","path","pattern"))
     if not hay.strip(): sys.exit(0)
     try:
-        paths = [p["path"] for p in jload(hp("partners.json")).get("partners",{}).values()]
+        paths = [p["path"] for p in partners_doc().get("partners",{}).values()]
     except Exception:
         sys.exit(0)
     for pp in paths:
@@ -583,7 +671,7 @@ def cmd_watch(name, poll=None):
     falls back to polling where no file-watcher exists. It never commits or relays (§0)."""
     cfg, repo = partner(name)
     if cfg is None:
-        print(f"ERROR: partner '{name}' not in partners.json"); sys.exit(1)
+        print(f"ERROR: partner '{name}' not configured"); sys.exit(1)
     if not repo.is_dir():
         print(f"ERROR: partner '{name}' repo not found"); sys.exit(1)
     pinned = cfg.get("last_pinned") or ""
@@ -760,8 +848,8 @@ if __name__ == "__main__":
     if "--read-guard" in sys.argv:
         cmd_read_guard()
     h = home()
-    if h is None or not os.path.exists(os.path.join(h, "partners.json")):
-        print("ERROR: no partners.json found — set PARALLAX_HOME or run from a sync home"); sys.exit(1)
+    if h is None or (not cross_team_config_path() and not os.path.exists(os.path.join(h, "partners.json"))):
+        print("ERROR: no config found — set CROSS_TEAM_CONFIG, set PARALLAX_HOME, or run from a sync home"); sys.exit(1)
     if len(sys.argv) < 2:
         print("Usage: parallax.py [detect|read|prepare|relay|count|ledger|guard|watch|index-diff|div-diff|age-divergences|convergence-audit] [args...]"); sys.exit(2)
     c = sys.argv[1]; a = sys.argv[2:]

@@ -122,7 +122,7 @@ def m4_invocation():
     try:
         ad = _adapter.from_interface_declaration(decl, DAEMON)
     except Exception as e:
-        # the declaration exists but op's adapter can't parse it (schema divergence):
+        # the declaration exists but team-b's adapter can't parse it (schema divergence):
         # BLOCKED at the interface layer, not a measured failure of the daemon.
         return {"correct": None, "blocked": f"unparseable declaration: {type(e).__name__}",
                 "probe_calls_avoided": 0}
