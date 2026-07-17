@@ -104,6 +104,8 @@ see their rows.**
 | B12 ★ | rung1 | `watch` (poll mode) fires on HEAD-past-pin → writes `_inbox.json`, exits 0, **never commits** | soft | the automation-tier mechanism; platform-agnostic (`--poll`, no `inotifywait`) |
 | B12b ★ | rung1 | `watch` (POLL path) blocks at HEAD==pin then **catches** a fresh partner commit — cross-platform | soft | end-to-end LCD: block → commit lands → `_inbox.json` written, exit 0 |
 | B12c ★ | rung1 | `watch` (INOTIFY fast-path) catches a fresh commit — where `inotifywait` exists | soft | gated on `inotifywait`: **BLOCKED** on macOS/Windows (B12b covers them), PASS on Linux |
+| B35 ★ | config | `CROSS_TEAM_CONFIG` drives partners + tiers without split config or consumer worktree state | hard | detect writes under `git rev-parse --git-path cross-team/parallax`; static config remains byte-identical |
+| B36 ★ | config | `CROSS_TEAM_CONFIG` pin advance writes only Git-private cursor state | hard | detect/read/prepare `--advance` leaves config unchanged and writes `{last_pinned,last_sync}` to `partner_cursors.json` |
 
 ### Layer E — robustness (black-box, no traceback on bad input)
 

@@ -23,25 +23,33 @@ def cross_team_config():
         _CROSS_TEAM_CONFIG = json.load(open(p))
     return _CROSS_TEAM_CONFIG
 
-def save_cross_team_config(d):
-    global _CROSS_TEAM_CONFIG
-    p = cross_team_config_path()
-    if not p:
-        raise RuntimeError("CROSS_TEAM_CONFIG is not set")
-    json.dump(d, open(p, "w"), indent=2)
-    _CROSS_TEAM_CONFIG = d
-
 def config_root():
     p = cross_team_config_path()
     return p.parent if p else Path(home())
+
+def _private_state_home():
+    """Return the consumer's worktree-safe private Parallax state directory."""
+    config = cross_team_config_path()
+    root = config.parent
+    r = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "--git-path", "cross-team/parallax"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0 or not r.stdout.strip():
+        print("ERROR: CROSS_TEAM_CONFIG must be inside a Git worktree "
+              "(cannot create private Parallax runtime state)", file=sys.stderr)
+        sys.exit(2)
+    state = Path(r.stdout.strip())
+    if not state.is_absolute():
+        state = root / state
+    state.mkdir(parents=True, exist_ok=True)
+    return state
 
 def home():
     """DAEMON_INTERFACE §1: CROSS_TEAM_CONFIG, else PARALLAX_HOME, else nearest
     cwd-ancestor with partners.json, else this script's directory."""
     if cross_team_config_path():
-        state = cross_team_config_path().parent / "_cross-team"
-        state.mkdir(exist_ok=True)
-        return str(state)
+        return str(_private_state_home())
     if os.environ.get("PARALLAX_HOME"):
         return os.environ["PARALLAX_HOME"]
     d = os.getcwd()
@@ -230,18 +238,43 @@ def parallax_config():
     ct = cross_team_config()
     return ct.get("parallax", {}) if ct else None
 
+_CURSOR_FIELDS = ("last_pinned", "last_sync")
+
+def cursor_state():
+    d = jload(hp("partner_cursors.json"))
+    partners = d.get("partners", {})
+    return {"version": 1, "partners": partners if isinstance(partners, dict) else {}}
+
 def partners_doc():
     pc = parallax_config()
     if pc is not None:
-        return {"partners": pc.get("partners", {})}
+        cursors = cursor_state()["partners"]
+        partners = {}
+        for name, static in pc.get("partners", {}).items():
+            merged = dict(static)
+            cursor = cursors.get(name, {})
+            if isinstance(cursor, dict):
+                for field in _CURSOR_FIELDS:
+                    if field in cursor:
+                        merged[field] = cursor[field]
+            partners[name] = merged
+        return {"partners": partners}
     return jload(hp("partners.json"))
 
 def save_partners_doc(doc):
     pc = parallax_config()
     if pc is not None:
-        ct = cross_team_config()
-        ct.setdefault("parallax", {})["partners"] = doc.get("partners", {})
-        save_cross_team_config(ct)
+        state = cursor_state()
+        static_names = pc.get("partners", {})
+        for name, partner_cfg in doc.get("partners", {}).items():
+            if name not in static_names:
+                continue
+            state["partners"][name] = {
+                field: partner_cfg.get(field)
+                for field in _CURSOR_FIELDS
+                if field in partner_cfg
+            }
+        jsave(hp("partner_cursors.json"), state)
     else:
         jsave(hp("partners.json"), doc)
 
@@ -555,8 +588,7 @@ def cmd_relay(paths=None):
     # cwd silently matches nothing → falsely passes the commit-before-relay gate. Resolve
     # the toplevel so the pathspec aligns. (home() not in a repo → root falls back to
     # home(), preserving the prior non-git behavior.)
-    root = subprocess.run(["git","-C",home(),"rev-parse","--show-toplevel"],
-                          capture_output=True, text=True).stdout.strip() or home()
+    root = repo_root()
     args = ["git","-C",root,"status","--porcelain"]
     if paths: args += ["--"] + list(paths)
     r = subprocess.run(args, capture_output=True, text=True)

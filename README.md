@@ -42,10 +42,23 @@ it on Linux (`apt install inotify-tools`) for the event-driven path, or rely on 
 elsewhere (macOS/Windows). The conformance suite's inotify check (`B12c`) needs it too, and is
 **BLOCKED** without it (the poll-path check `B12b` covers cross-platform conformance regardless).
 
-## Configuration — a "sync home"
+## Configuration — static consumer config or a legacy "sync home"
 
-The daemon finds its config via `PARALLAX_HOME`, else the nearest cwd-ancestor with a
-`partners.json` (so the home may sit at the repo root *or* in a subdirectory like
+With `CROSS_TEAM_CONFIG=/path/to/cross-team.json`, Parallax reads static partner
+descriptors and tiers from the consumer config. The consumer must be a Git
+worktree. Runtime state is resolved with:
+
+```sh
+git -C <consumer-root> rev-parse --git-path cross-team/parallax
+```
+
+That Git-private directory holds daemon emissions, read logs, ledgers, and
+`partner_cursors.json`; a cursor stores each partner's `last_pinned` and
+`last_sync`. Syncing never modifies `cross-team.json`.
+
+Without `CROSS_TEAM_CONFIG`, the legacy mode finds its config via
+`PARALLAX_HOME`, else the nearest cwd-ancestor with a `partners.json` (so the
+home may sit at the repo root *or* in a subdirectory like
 `methodology/cross_team/`). The home holds:
 
 - **`partners.json`** — partner repos (path) + the `last_pinned` sync point.

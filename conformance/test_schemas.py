@@ -65,9 +65,9 @@ def collect(home=None):
                 + (f"  [{errs[0]}]" if errs else ""), True, not errs))
     # S5 — claims_index convergence_tag constraint: independent ⟹ measurement-based
     cschema = json.load(open(os.path.join(SCHEMAS, "claims_index.schema.json")))
-    _good = {"entries": [{"id": "team-b:F-X-1", "statement": "s", "evidence_ref": "260101-0000",
+    _good = {"entries": [{"id": "teamb:F-X-1", "statement": "s", "evidence_ref": "260101-0000",
                           "evidence_tier": "measured", "convergence_tag": "independent", "status": "corroborated"}]}
-    _bad = {"entries": [{"id": "team-b:F-Y-1", "statement": "s",
+    _bad = {"entries": [{"id": "teamb:F-Y-1", "statement": "s",
                          "evidence_tier": "conjectural", "convergence_tag": "independent", "status": "open"}]}
     out.append(("S5", "schema", "claims_index: independent ⟹ measured/inferred (valid passes; conjectural+independent rejected)",
                 True, (not validate(_good, cschema)) and bool(validate(_bad, cschema))))

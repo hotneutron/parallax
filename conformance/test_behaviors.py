@@ -308,12 +308,30 @@ def b34(ad, home, partner, ctx):
             and note not in unclassified)
 
 
-@check("B35", "config", "CROSS_TEAM_CONFIG drives partners + tiers without split live config")
+def _private_state_path(repo):
+    rel = subprocess.run(
+        ["git", "-C", repo, "rev-parse", "--git-path", "cross-team/parallax"],
+        check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    return rel if os.path.isabs(rel) else os.path.join(repo, rel)
+
+
+def _cross_config_run(ad, home, config_path, *args):
+    env = {**os.environ, "CROSS_TEAM_CONFIG": config_path}
+    env.pop("PARALLAX_HOME", None)
+    return subprocess.run([ad.python, ad.daemon, *args], cwd=home, env=env,
+                          capture_output=True, text=True, timeout=10)
+
+
+@check("B35", "config", "CROSS_TEAM_CONFIG drives partners + tiers without split config or worktree state")
 def b35(ad, home, partner, ctx):
     tmp = tempfile.mkdtemp()
     try:
         h, _p, _ctx = _fixture.build(tmp)
         partners = json.load(open(os.path.join(h, "partners.json")))["partners"]
+        for partner_cfg in partners.values():
+            partner_cfg.pop("last_pinned", None)
+            partner_cfg.pop("last_sync", None)
         tiers = {
             "self_name": "consumer-repo",
             "addressed": ["reaction", "cross_check", "proposal"],
@@ -327,17 +345,66 @@ def b35(ad, home, partner, ctx):
         cfg = {"version": "1.0", "parallax": {"partners": partners, "tiers": tiers}}
         config_path = os.path.join(h, "cross-team.json")
         json.dump(cfg, open(config_path, "w"), indent=2)
+        before = open(config_path, "rb").read()
         os.remove(os.path.join(h, "partners.json"))
         os.remove(os.path.join(h, "tiers.json"))
-        env = {**os.environ, "CROSS_TEAM_CONFIG": config_path}
-        env.pop("PARALLAX_HOME", None)
-        r = subprocess.run([ad.python, ad.daemon, "detect", "p"], cwd=h, env=env,
-                           capture_output=True, text=True, timeout=10)
-        detect_path = os.path.join(h, "_cross-team", "_detect.json")
+        r = _cross_config_run(ad, h, config_path, "detect", "p")
+        state = _private_state_path(h)
+        detect_path = os.path.join(state, "_detect.json")
         if r.returncode != 0 or not os.path.exists(detect_path):
             return False
         dj = json.load(open(detect_path))
-        return dj.get("partner") == "p" and "docs/0002-reaction.md" in dj.get("tiers", {}).get("1", [])
+        return (
+            dj.get("partner") == "p"
+            and "docs/0002-reaction.md" in dj.get("tiers", {}).get("1", [])
+            and open(config_path, "rb").read() == before
+            and not os.path.exists(os.path.join(h, "_cross-team"))
+        )
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@check("B36", "config", "CROSS_TEAM_CONFIG pin advance writes only Git-private cursor state")
+def b36(ad, home, partner, ctx):
+    tmp = tempfile.mkdtemp()
+    try:
+        h, p, _ctx = _fixture.build(tmp)
+        partners = json.load(open(os.path.join(h, "partners.json")))["partners"]
+        for partner_cfg in partners.values():
+            partner_cfg.pop("last_pinned", None)
+            partner_cfg.pop("last_sync", None)
+        tiers = {
+            "self_name": "consumer-repo",
+            "addressed": ["reaction", "cross_check", "proposal"],
+            "addressed_to_us": [],
+            "atypes": {"findings": 2, "plan": 2, "brainstorm": 3, "reflection": 4},
+            "triggers": ["docs/", "schemas/", "sync_ledger.json"],
+            "contracts": ["schemas/"],
+            "doc_dirs": ["docs/"],
+            "promote_brainstorm": None,
+        }
+        config_path = os.path.join(h, "cross-team.json")
+        json.dump({"version": "1.0", "parallax": {"partners": partners, "tiers": tiers}},
+                  open(config_path, "w"), indent=2)
+        before = open(config_path, "rb").read()
+        os.remove(os.path.join(h, "partners.json"))
+        os.remove(os.path.join(h, "tiers.json"))
+
+        detected = _cross_config_run(ad, h, config_path, "detect", "p")
+        read = _cross_config_run(ad, h, config_path, "read", "p", "docs/0002-reaction.md")
+        advanced = _cross_config_run(ad, h, config_path, "prepare", "p", "--advance")
+        state_path = os.path.join(_private_state_path(h), "partner_cursors.json")
+        if any(r.returncode != 0 for r in (detected, read, advanced)) or not os.path.exists(state_path):
+            return False
+        state = json.load(open(state_path))
+        head = git(p, "rev-parse", "HEAD").strip()
+        cursor = state.get("partners", {}).get("p", {})
+        return (
+            open(config_path, "rb").read() == before
+            and cursor.get("last_pinned") == head
+            and cursor.get("last_sync")
+            and not os.path.exists(os.path.join(h, "_cross-team"))
+        )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
