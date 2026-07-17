@@ -8,7 +8,7 @@ contract to one coding agent's primitives — three hooks:
 - **on-complete** — re-engage the agent when there's a drafted cycle (`_inbox.json`),
 - **capture-prompt** — feed the prompt-log (rung 4).
 
-Parallax ships a **superset** of adapters (`claude-code/`, `opencode/`, `generic/`); a consumer
+Parallax ships a **superset** of adapters (`claude-code/`, `codex/`, `opencode/`, `generic/`); a consumer
 selects its agent's. Adding one is additive — it changes no interface.
 
 ## Verification — and why an adapter is NOT "conformance"
@@ -27,7 +27,7 @@ The load-bearing distinction (the whole reason the mechanism uses a file/exit co
   the platform**, and **does not claim conformance**.
 - **`generic/` is the special case:** it adds *no* platform glue — it just polls `_inbox.json`
   — so its verification *is* the mechanism contract. **B12 already covers it.** Only
-  `claude-code/`/`opencode/` (real glue) need a per-platform smoke.
+  `claude-code/`/`codex/`/`opencode/` (real glue) need a per-platform smoke.
 
 > Conformance stops at the mechanism (platform-agnostic, bilateral). The platform layer is
 > smoke-tested per platform. Neither ever claims to be the other.
